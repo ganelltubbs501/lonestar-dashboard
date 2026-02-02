@@ -46,3 +46,23 @@ next-env.d.ts
 # Logs
 logs
 *.log
+
+# env / secrets
+.env
+.env.*
+*.local
+
+# keys / credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+service-account*.json
+google-*.json
+credentials*.json
+
+# node
+node_modules
+.next
+dist
