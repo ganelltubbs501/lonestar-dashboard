@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: ops-desktop-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ops
+      POSTGRES_PASSWORD: ops_password
+      POSTGRES_DB: ops_desktop
+    volumes:
+      - ops_desktop_pgdata:/var/lib/postgresql/data
+
+volumes:
+  ops_desktop_pgdata:

@@ -1,0 +1,28 @@
+# fly.toml - Fly.io configuration
+# Run: fly launch --no-deploy
+# Then: fly secrets set AUTH_SECRET=... DATABASE_URL=... etc
+# Then: fly deploy
+
+app = "ops-desktop"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3000"
+  DEMO_MODE = "true"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 512

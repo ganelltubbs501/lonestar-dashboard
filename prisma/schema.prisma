@@ -1,0 +1,635 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// AUTH (NextAuth models)
+// =============================================================================
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// =============================================================================
+// CORE APP MODELS
+// =============================================================================
+
+enum Role {
+  ADMIN
+  STAFF
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          Role      @default(STAFF)
+
+  passwordHash String? // NEW (bcrypt hash)
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts         Account[]
+  sessions         Session[]
+  requestedItems   WorkItem[]  @relation("Requester")
+  ownedItems       WorkItem[]  @relation("Owner")
+  comments         Comment[]
+  messages         Message[]   @relation("MessageSender")
+  auditLogs        AuditLog[]
+  assignedSubtasks Subtask[]   @relation("SubtaskAssignee")
+  uploadedEvents   Event[]     @relation("EventUploader")
+  weekendEvents    Event[]     @relation("WeekendOwner")
+  ownedDeadlines   EditorialDeadline[] @relation("DeadlineOwner")
+  magazineItemsOwned MagazineItem[] @relation("MagazineItemOwner")
+}
+
+// =============================================================================
+// WORK ITEMS (universal object)
+// =============================================================================
+
+enum WorkItemType {
+  BOOK_CAMPAIGN
+  SOCIAL_ASSET_REQUEST
+  SPONSORED_EDITORIAL_REVIEW
+  TX_BOOK_PREVIEW_LEAD
+  WEBSITE_EVENT
+  ACCESS_REQUEST
+  GENERAL
+}
+
+enum WorkItemStatus {
+  BACKLOG
+  READY
+  IN_PROGRESS
+  BLOCKED
+  IN_REVIEW
+  NEEDS_QA
+  DONE
+}
+
+enum WorkItemPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// Secondary classification for editorial spine + filters
+enum DeliverableType {
+  CAMPAIGN
+  SER
+  MAGAZINE
+  TBP
+  EVENTS
+  NEWSLETTER
+}
+
+model WorkItem {
+  id          String           @id @default(uuid())
+  type        WorkItemType
+  title       String
+  description String?
+  status      WorkItemStatus   @default(READY)
+  priority    WorkItemPriority @default(MEDIUM)
+
+  dueAt         DateTime?
+  startAt       DateTime?
+  blockedReason String?
+  tags          String[]       @default([])
+
+  // Editorial spine fields
+  deliverableType DeliverableType?
+  cadenceKey      String?           // e.g. NEWSLETTER_WEEKLY, EVENTS_FRIDAY, SER_30_DAY
+  needsProofing   Boolean           @default(false)
+
+  // Inbox/Reply chasing - stronger than just awaitingReply boolean
+  waitingOnUserId String?
+  waitingReason   String?
+  waitingSince    DateTime?
+  lastContactedAt DateTime?
+
+  // TBP/Magazine detail fields (enforceable by code before NEEDS_QA/DONE)
+  tbpGraphicsLocation String?
+  tbpPublishDate      DateTime?
+  tbpArticleLink      String?
+  tbpTxTie            String?
+  tbpMagazineIssue    String?
+
+  // Ownership
+  requesterId String
+  requester   User   @relation("Requester", fields: [requesterId], references: [id])
+
+  ownerId String?
+  owner   User?  @relation("Owner", fields: [ownerId], references: [id])
+
+  // Relations
+  subtasks          Subtask[]
+  comments          Comment[]
+  auditLogs         AuditLog[]
+  messages          Message[]
+  qcChecks          QCCheck[]
+  ghlLinks          GhlLink[]
+  integrationEvents IntegrationEvent[]
+  linkedDeadlines   EditorialDeadline[]
+  linkedEvents      Event[]
+  magazineItems     MagazineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([ownerId])
+  @@index([requesterId])
+  @@index([type])
+  @@index([deliverableType])
+  @@index([needsProofing])
+  @@index([waitingOnUserId])
+  @@index([dueAt])
+}
+
+// =============================================================================
+// SUBTASKS / COMMENTS / AUDIT
+// =============================================================================
+
+model Subtask {
+  id         String    @id @default(uuid())
+  workItemId String
+  title      String
+  order      Int       @default(0)
+  completedAt DateTime?
+
+  assigneeUserId String?
+  assignee       User?    @relation("SubtaskAssignee", fields: [assigneeUserId], references: [id])
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workItemId])
+  @@index([assigneeUserId])
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  workItemId String
+  userId     String
+  body       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+
+  @@index([workItemId])
+  @@index([userId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  workItemId String?
+  userId     String?
+  action     String      // "status_changed", "owner_changed", "waiting_set", "password_reset_admin", etc.
+  fromValue  String?
+  toValue    String?
+  meta       Json?       // optional structured info
+  createdAt  DateTime @default(now())
+
+  workItem WorkItem? @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id])
+
+  @@index([workItemId])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+// =============================================================================
+// TEMPLATES (Triggers + QC)
+// =============================================================================
+
+model TriggerTemplate {
+  id            String       @id @default(uuid())
+  name          String
+  description   String?
+  workItemType  WorkItemType
+  subtasks      Json         // ordered list [{ title, offsetDays? }]
+  dueDaysOffset Int          @default(7)
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([workItemType])
+  @@index([isActive])
+}
+
+model QCTemplate {
+  id           String       @id @default(uuid())
+  name         String
+  workItemType WorkItemType
+  checkpoints  Json         // ordered list of strings OR [{name, required}]
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@index([workItemType])
+  @@index([isActive])
+}
+
+enum QCStatus {
+  PENDING
+  PASSED
+  FAILED
+  SKIPPED
+}
+
+model QCCheck {
+  id          String    @id @default(uuid())
+  workItemId  String
+  checkpoint  String
+  status      QCStatus  @default(PENDING)
+  notes       String?
+  checkedAt   DateTime?
+  checkedById String?
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@index([workItemId])
+  @@index([status])
+}
+
+// =============================================================================
+// EDITORIAL CALENDAR (recurring spine)
+// =============================================================================
+
+enum DeadlineStatus {
+  UPCOMING
+  IN_PROGRESS
+  NEEDS_REVIEW
+  COMPLETED
+  MISSED
+}
+
+enum RecurrenceType {
+  DAILY
+  WEEKLY
+  BIWEEKLY
+  MONTHLY
+  QUARTERLY
+}
+
+model EditorialDeadline {
+  id          String         @id @default(uuid())
+  type        DeliverableType
+  title       String
+  description String?
+  dueAt       DateTime
+  status      DeadlineStatus @default(UPCOMING)
+
+  isRecurring Boolean        @default(false)
+  recurrence  RecurrenceType?
+
+  ownerId String?
+  owner   User?  @relation("DeadlineOwner", fields: [ownerId], references: [id])
+
+  // Link to work item that satisfies this deadline
+  workItemId String?
+  workItem   WorkItem? @relation(fields: [workItemId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dueAt])
+  @@index([type])
+  @@index([status])
+  @@index([ownerId])
+}
+
+// =============================================================================
+// EVENTS PIPELINE (Sheet -> CSV -> WordPress)
+// =============================================================================
+
+enum EventPipelineStatus {
+  INTAKE
+  COMPILATION
+  READY_TO_UPLOAD
+  UPLOADED
+  ARCHIVED
+}
+
+model Event {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  eventDate   DateTime
+  venue       String?
+  location    String?
+  sourceSheet String?
+
+  pipelineStatus EventPipelineStatus @default(INTAKE)
+
+  batchDate    DateTime?
+  uploadedAt   DateTime?
+  uploadedById String?
+  uploadedBy   User?    @relation("EventUploader", fields: [uploadedById], references: [id])
+
+  isWeekendEvent Boolean @default(false)
+  weekendOwnerId String?
+  weekendOwner   User?   @relation("WeekendOwner", fields: [weekendOwnerId], references: [id])
+
+  qcChecklist Json? // {tagsFound, alphabetized, formattingChecked}
+
+  // Link to WorkItem if event pipeline creates tasks
+  workItemId String?
+  workItem   WorkItem? @relation(fields: [workItemId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pipelineStatus])
+  @@index([batchDate])
+  @@index([eventDate])
+  @@index([isWeekendEvent])
+}
+
+// =============================================================================
+// COMMUNICATIONS HUB
+// =============================================================================
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+  INTERNAL
+}
+
+enum MessageChannel {
+  INTERNAL
+  EMAIL
+  PHONE
+  OTHER
+}
+
+model Message {
+  id         String           @id @default(uuid())
+  workItemId String
+  senderId   String?
+  direction  MessageDirection
+  channel    MessageChannel   @default(INTERNAL)
+  body       String
+
+  externalEmail String?
+  externalName  String?
+
+  sentAt DateTime?
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  sender   User?    @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@index([workItemId])
+  @@index([direction])
+  @@index([createdAt])
+}
+
+// =============================================================================
+// GHL INTEGRATION (production-minded)
+// =============================================================================
+
+model GhlLink {
+  id            String   @id @default(uuid())
+  workItemId    String
+  ghlObjectType String   // "contact" | "opportunity" | "task" | "custom"
+  ghlObjectId   String
+  createdAt     DateTime @default(now())
+
+  workItem WorkItem @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+
+  @@index([workItemId])
+  @@unique([ghlObjectType, ghlObjectId])
+}
+
+model IntegrationEvent {
+  id          String    @id @default(uuid())
+  source      String    // "ghl"
+  eventType   String
+  payload     Json
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+
+  // Optional linkage
+  workItemId String?
+  workItem   WorkItem? @relation(fields: [workItemId], references: [id])
+
+  @@index([receivedAt])
+  @@index([source])
+  @@index([eventType])
+  @@index([processedAt])
+}
+
+// =============================================================================
+// MAGAZINE MODULE
+// =============================================================================
+
+enum MagazineSection {
+  FRONT
+  FEATURES
+  REGULARS
+  EVENTS
+  SPONSORED_EDITORIAL_REVIEWS
+  BOOK_CAMPAIGNS
+  TEXAS_BOOKS_PREVIEW
+  ADS
+  OTHER
+}
+
+enum MagazineItemType {
+  ITEM        // normal deliverable row
+  SUBITEM     // "with Emily Smith" style sub-row
+  AD          // ad entry
+  URL_ONLY    // url rows if they appear alone
+  HEADER      // section header rows from spreadsheet (optional)
+}
+
+model MagazineIssue {
+  id          String   @id @default(uuid())
+  year        Int
+  month       Int      // 1-12
+  title       String   // "February 2026"
+  themeColor  String?  // "#FFC5E6" from your sheet
+  notes       String?
+  dueAt       DateTime?  // optional "issue due/publish"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items       MagazineItem[]
+
+  @@unique([year, month])
+  @@index([year, month])
+}
+
+model MagazineItem {
+  id            String   @id @default(uuid())
+  issueId       String
+  issue         MagazineIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  section       MagazineSection @default(OTHER)
+  kind          MagazineItemType @default(ITEM)
+
+  title         String
+  url           String?
+  notes         String?
+
+  proofed       Boolean  @default(false)
+  inFolder      Boolean  @default(false)
+
+  // Optional ownership + scheduling
+  ownerId       String?
+  owner         User?    @relation("MagazineItemOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  dueAt         DateTime?
+  needsProofing Boolean  @default(false)
+
+  // Optional ad metadata
+  adSize        String?  // "Quarter", "Half"
+  sortOrder     Int      @default(0)
+
+  // Optional link to WorkItem if you want it (nice-to-have)
+  workItemId    String?
+  workItem      WorkItem? @relation(fields: [workItemId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([issueId, section, sortOrder])
+  @@index([ownerId])
+  @@index([dueAt])
+}
+
+// =============================================================================
+// GOOGLE SHEETS SYNC
+// =============================================================================
+
+enum SourceSystem {
+  GOOGLE_SHEETS
+}
+
+model SheetSyncState {
+  id              String       @id @default(cuid())
+  sourceSystem    SourceSystem @default(GOOGLE_SHEETS)
+
+  // what we're syncing
+  spreadsheetId   String
+  sheetName       String
+  rangeA1         String
+
+  // optional identity for multi-modules
+  key             String       @unique // e.g. "TEXAS_AUTHORS"
+
+  // sync bookkeeping
+  lastSyncedAt    DateTime?
+  lastRowCount    Int?
+  lastHash        String?      // hash of normalized content to detect change
+  lastError       String?
+  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime     @default(now())
+
+  @@index([spreadsheetId, sheetName])
+}
+
+// =============================================================================
+// TEXAS AUTHORS (Google Sheets import)
+// =============================================================================
+
+model TexasAuthor {
+  id              String   @id @default(uuid())
+
+  // "natural key" from sheet (so upsert is stable)
+  externalKey     String   @unique
+
+  name            String
+  email           String?
+  phone           String?
+  website         String?
+  city            String?
+  state           String?
+  notes           String?
+
+  // store the full row for safety/debug
+  raw             Json?
+
+  // provenance
+  sourceSystem    SourceSystem @default(GOOGLE_SHEETS)
+  sourceRef       String?      // spreadsheetId/sheetName/rowIndex etc
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([name])
+  @@index([email])
+}
+
+model SheetsImportRun {
+  id            String   @id @default(uuid())
+  kind          SheetsImportKind
+  spreadsheetId String
+  range         String
+  status        ImportStatus @default(SUCCESS)
+  inserted      Int      @default(0)
+  updated       Int      @default(0)
+  skipped       Int      @default(0)
+  error         String?
+  createdAt     DateTime @default(now())
+}
+
+enum SheetsImportKind {
+  TEXAS_AUTHORS
+}
+
+enum ImportStatus {
+  SUCCESS
+  FAILED
+}
