@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from './auth';
 import { ZodError } from 'zod';
 import logger from './logger';
+import { apiRateLimiter } from './rate-limit';
 
 export type ApiResponse<T = unknown> = {
   data?: T;
@@ -35,6 +36,24 @@ export async function withAuth<T>(
     if (!session?.user?.id) {
       return errorResponse('Unauthorized', 401) as NextResponse<ApiResponse<T>>;
     }
+
+    // Rate limiting: 100 requests per minute per user
+    const rateLimit = apiRateLimiter.check(session.user.id);
+    if (!rateLimit.success) {
+      logger.warn({ userId: session.user.id, remaining: 0 }, 'API rate limit exceeded');
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': '100',
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(rateLimit.reset),
+          },
+        }
+      ) as NextResponse<ApiResponse<T>>;
+    }
+
     return handler(session.user.id);
   } catch (error) {
     logger.error({ error }, 'API error');
@@ -53,6 +72,24 @@ export async function withAdminAuth<T>(
     if (session.user.role !== 'ADMIN') {
       return errorResponse('Forbidden: Admin access required', 403) as NextResponse<ApiResponse<T>>;
     }
+
+    // Rate limiting: 100 requests per minute per user
+    const rateLimit = apiRateLimiter.check(session.user.id);
+    if (!rateLimit.success) {
+      logger.warn({ userId: session.user.id, remaining: 0 }, 'API rate limit exceeded');
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Limit': '100',
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': String(rateLimit.reset),
+          },
+        }
+      ) as NextResponse<ApiResponse<T>>;
+    }
+
     return handler(session.user.id);
   } catch (error) {
     logger.error({ error }, 'API error');

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/db";
 import { fetchSheetValues } from "@/lib/googleSheets";
+import { resolveTexasAuthorsSheetConfig } from "@/lib/texasAuthors/config";
 import { errorResponse, successResponse, withAdminAuth } from "@/lib/api-utils";
 
 function normHeader(h: string) {
@@ -22,15 +23,7 @@ function pick(row: Record<string, string>, keys: string[]) {
 
 export async function POST() {
   return withAdminAuth(async () => {
-    const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-    const range = process.env.GOOGLE_SHEETS_RANGE;
-
-    if (!spreadsheetId || !range) {
-      return errorResponse(
-        "Missing GOOGLE_SHEETS_SPREADSHEET_ID or GOOGLE_SHEETS_RANGE",
-        400
-      );
-    }
+    const { spreadsheetId, range } = await resolveTexasAuthorsSheetConfig();
 
     const run = await prisma.sheetsImportRun.create({
       data: { kind: "TEXAS_AUTHORS", spreadsheetId, range, status: "SUCCESS" },
@@ -69,12 +62,12 @@ export async function POST() {
           continue;
         }
 
-        const email = pick(r, ["email", "email address"]);
-        const phone = pick(r, ["phone", "phone number"]);
-        const city = pick(r, ["city"]);
-        const state = pick(r, ["state"]);
-        const website = pick(r, ["website", "site", "url"]);
-        const notes = pick(r, ["notes", "note", "comments", "comment"]);
+        const email = pick(r, ["email", "email address", "contact email"]);
+        const phone = pick(r, ["phone", "phone number", "cell", "mobile"]);
+        const city = pick(r, ["city", "town"]);
+        const state = pick(r, ["state", "st"]);
+        const website = pick(r, ["website", "website url", "site", "url"]);
+        const notes = pick(r, ["notes", "note", "comments", "comment", "bio", "biography"]);
 
         // Build a natural key: normalized name + email/website if present
         const normalizedName = name.toLowerCase().replace(/\s+/g, "_");

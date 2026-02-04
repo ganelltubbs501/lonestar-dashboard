@@ -12,8 +12,11 @@ export async function GET(req: Request) {
             OR: [
               { name: { contains: q, mode: "insensitive" } },
               { email: { contains: q, mode: "insensitive" } },
+              { phone: { contains: q, mode: "insensitive" } },
               { website: { contains: q, mode: "insensitive" } },
               { city: { contains: q, mode: "insensitive" } },
+              { state: { contains: q, mode: "insensitive" } },
+              { notes: { contains: q, mode: "insensitive" } },
             ],
           }
         : undefined,

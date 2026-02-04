@@ -10,7 +10,8 @@
       "Bash(npx prisma generate:*)",
       "Bash(npx prisma studio)",
       "Bash(npm run dev:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npx prisma db push:*)"
     ]
   }
 }

@@ -36,16 +36,63 @@ async function main() {
       ? allowed.filter((e) => e !== adminEmail)
       : ["person2@gmail.com", "person3@gmail.com", "person4@gmail.com", "person5@gmail.com", "person6@gmail.com", "person7@gmail.com"];
 
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "StrongAdminPass";
-  const staffPassword = process.env.SEED_STAFF_PASSWORD ?? "TempStaffPass";
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const staffPassword = process.env.SEED_STAFF_PASSWORD;
+
+  if (!adminPassword || !staffPassword) {
+    console.error(`
+╔════════════════════════════════════════════════════════════════════════╗
+║              MISSING REQUIRED SEED ENVIRONMENT VARIABLES               ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+Please set the following environment variables before running seed:
+
+  SEED_ADMIN_PASSWORD   - Password for admin user (min 8 characters)
+  SEED_STAFF_PASSWORD   - Password for staff users (min 8 characters)
+
+Example:
+  SEED_ADMIN_PASSWORD="YourSecureAdminPass123" SEED_STAFF_PASSWORD="YourSecureStaffPass123" npx prisma db seed
+
+This ensures no default passwords are used in any environment.
+`);
+    process.exit(1);
+  }
+
+  if (adminPassword.length < 8 || staffPassword.length < 8) {
+    console.error("Error: Seed passwords must be at least 8 characters long.");
+    process.exit(1);
+  }
 
   const adminHash = await bcrypt.hash(adminPassword, 10);
   const staffHash = await bcrypt.hash(staffPassword, 10);
 
-  // Clear demo users if they exist (ops.com)
-  await prisma.user.deleteMany({
-    where: { email: { endsWith: "@ops.com" } },
-  });
+  // Clear demo users if they exist (ops.com) — must delete dependents first
+const demoUsers = await prisma.user.findMany({
+  where: { email: { endsWith: "@ops.com" } },
+  select: { id: true },
+});
+
+const demoUserIds = demoUsers.map(u => u.id);
+
+if (demoUserIds.length) {
+  await prisma.$transaction([
+    prisma.comment.deleteMany({ where: { userId: { in: demoUserIds } } }),
+    prisma.auditLog.deleteMany({ where: { userId: { in: demoUserIds } } }),
+    prisma.subtask.deleteMany({ where: { assigneeId: { in: demoUserIds } } }),
+
+    // WorkItem relations: requesterId is NOT nullable, so delete those items
+    prisma.workItem.deleteMany({ where: { requesterId: { in: demoUserIds } } }),
+
+    // If ownerId exists and is nullable, you can either delete or null them out:
+    prisma.workItem.updateMany({
+      where: { ownerId: { in: demoUserIds } },
+      data: { ownerId: null },
+    }),
+
+    prisma.user.deleteMany({ where: { id: { in: demoUserIds } } }),
+  ]);
+}
+
 
   // Create/Upsert Admin
   const admin = await prisma.user.upsert({

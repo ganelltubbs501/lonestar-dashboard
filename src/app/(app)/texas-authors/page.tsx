@@ -26,25 +26,50 @@ type AuthorDetail = {
   updatedAt: string;
 };
 
+type LastRun = {
+  id: string;
+  createdAt: string;
+  status: string;
+  inserted: number;
+  updated: number;
+  skipped: number;
+  error: string | null;
+};
+
 export default function TexasAuthorsPage() {
   const [q, setQ] = useState("");
   const [items, setItems] = useState<AuthorListItem[]>([]);
   const [selected, setSelected] = useState<AuthorDetail | null>(null);
+  const [lastRun, setLastRun] = useState<LastRun | null>(null);
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   async function load() {
     setLoading(true);
     try {
-      const res = await api.get(`/api/texas-authors?q=${encodeURIComponent(q)}`);
-      setItems(res.data?.items ?? []);
+      const res = await api.get<{ items: AuthorListItem[]; lastRun: LastRun | null }>(
+        `/api/texas-authors?q=${encodeURIComponent(q)}`
+      );
+      setItems(res?.items ?? []);
+      setLastRun(res?.lastRun ?? null);
     } finally {
       setLoading(false);
     }
   }
 
+  async function syncNow() {
+    setSyncing(true);
+    try {
+      await api.post("/api/texas-authors/sync", {});
+      await load();
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function open(id: string) {
-    const res = await api.get(`/api/texas-authors/${id}`);
-    setSelected(res.data?.item ?? null);
+    const res = await api.get<{ item: AuthorDetail }>(`/api/texas-authors/${id}`);
+    setSelected(res?.item ?? null);
   }
 
   useEffect(() => {
@@ -57,14 +82,26 @@ export default function TexasAuthorsPage() {
       <div className="flex-1 p-4 overflow-auto">
         <div className="flex items-center gap-2 flex-wrap">
           <h1 className="text-xl font-semibold">Texas Authors</h1>
+          {lastRun && (
+            <div className="text-xs text-gray-500">
+              Last sync: {new Date(lastRun.createdAt).toLocaleString()} • {lastRun.status}
+            </div>
+          )}
           <div className="ml-auto flex gap-2">
             <input
               className="w-72 rounded border px-3 py-2 text-sm"
-              placeholder="Search name, email, website, city…"
+              placeholder="Search name, email, phone, website, city…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && load()}
             />
+            <button
+              className="rounded border px-3 py-2 text-sm disabled:opacity-50"
+              onClick={syncNow}
+              disabled={syncing}
+            >
+              {syncing ? "Syncing…" : "Sync now"}
+            </button>
             <button
               className="rounded bg-black px-3 py-2 text-sm text-white disabled:opacity-50"
               onClick={load}

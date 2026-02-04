@@ -61,6 +61,11 @@ logs
 service-account*.json
 google-*.json
 credentials*.json
+*-*-*.json
+lonestar-dashboard-*.json
+
+# Claude temp files
+tmpclaude-*
 
 # node
 node_modules

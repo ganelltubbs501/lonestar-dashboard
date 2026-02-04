@@ -11,6 +11,7 @@ const protectedRoutes = [
   '/inbox',
   '/admin',
   '/trigger',
+  '/texas-authors',
 ];
 
 const adminRoutes = ['/admin'];
@@ -75,5 +76,6 @@ export const config = {
     '/inbox/:path*',
     '/admin/:path*',
     '/trigger/:path*',
+    '/texas-authors/:path*',
   ],
 };

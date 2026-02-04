@@ -597,6 +597,7 @@ model TexasAuthor {
   city            String?
   state           String?
   notes           String?
+  contacted       Boolean  @default(false)  // Checkbox from first column
 
   // store the full row for safety/debug
   raw             Json?
@@ -610,6 +611,7 @@ model TexasAuthor {
 
   @@index([name])
   @@index([email])
+  @@index([contacted])
 }
 
 model SheetsImportRun {

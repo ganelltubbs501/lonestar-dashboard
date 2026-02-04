@@ -1,6 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config({ path: ".env" });
-curl -X POST http://localhost:3000/api/cron/sync/texas-authors -H "x-cron-secret: change-me"
+
 import fs from "node:fs";
 import { google } from "googleapis";
 

@@ -3,6 +3,7 @@ import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { prisma } from './db';
 import logger from './logger';
+import { authRateLimiter } from './rate-limit';
 import type { Role } from '@prisma/client';
 import type { JWT } from 'next-auth/jwt';
 import type { Session, User } from 'next-auth';
@@ -49,6 +50,13 @@ const authOptions = {
         const password = creds?.password ?? '';
 
         if (!email || !password) return null;
+
+        // Rate limiting: 5 attempts per minute per email
+        const rateLimit = authRateLimiter.check(email);
+        if (!rateLimit.success) {
+          logger.warn({ email, remaining: rateLimit.remaining }, 'Auth rate limit exceeded');
+          return null;
+        }
 
         // allowlist (comma-separated emails)
         const allowlist = (process.env.ALLOWED_EMAILS ?? '')
@@ -103,7 +111,7 @@ const authOptions = {
       logger.info({ userId }, 'User signed out');
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: process.env.AUTH_SECRET,
 };
 
 export const { handlers, auth, signIn, signOut } = NextAuth(authOptions);

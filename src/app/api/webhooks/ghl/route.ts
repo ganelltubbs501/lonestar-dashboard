@@ -4,6 +4,7 @@ import { ghlWebhookSchema } from '@/lib/validations';
 import logger from '@/lib/logger';
 import { Prisma, WorkItemType, WorkItemStatus, WorkItemPriority } from '@prisma/client';
 import crypto from 'crypto';
+import { webhookRateLimiter, getClientIP } from '@/lib/rate-limit';
 
 // Verify webhook signature if secret is configured
 function verifySignature(payload: string, signature: string | null): boolean {
@@ -25,6 +26,25 @@ function verifySignature(payload: string, signature: string | null): boolean {
 
 // POST /api/webhooks/ghl - Handle inbound GHL webhooks
 export async function POST(request: NextRequest) {
+  // Rate limiting: 30 requests per minute per IP
+  const clientIP = getClientIP(request);
+  const rateLimit = webhookRateLimiter.check(clientIP);
+
+  if (!rateLimit.success) {
+    logger.warn({ ip: clientIP, reset: rateLimit.reset }, 'Webhook rate limit exceeded');
+    return NextResponse.json(
+      { error: 'Too many requests' },
+      {
+        status: 429,
+        headers: {
+          'X-RateLimit-Limit': '30',
+          'X-RateLimit-Remaining': '0',
+          'X-RateLimit-Reset': String(rateLimit.reset),
+        },
+      }
+    );
+  }
+
   let payloadText: string;
   let payload: Record<string, unknown>;
 

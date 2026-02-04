@@ -6,8 +6,8 @@
 
 const requiredEnvVars = [
   'DATABASE_URL',
-  'NEXTAUTH_SECRET',
-  'NEXTAUTH_URL',
+  'AUTH_SECRET',
+  'AUTH_URL',
   'ALLOWED_EMAILS',
 ];
 
@@ -40,6 +40,23 @@ For production deployments, ensure all variables are defined.
     process.exit(1);
   }
 
+  // Warn about missing optional but recommended vars in production
+  if (process.env.NODE_ENV === 'production') {
+    const warnings: string[] = [];
+
+    if (!process.env.CRON_SYNC_SECRET) {
+      warnings.push('CRON_SYNC_SECRET not set - cron endpoints will reject all requests');
+    }
+    if (!process.env.GHL_WEBHOOK_SECRET) {
+      warnings.push('GHL_WEBHOOK_SECRET not set - webhook signature verification disabled');
+    }
+
+    if (warnings.length > 0) {
+      console.warn('⚠️  Production environment warnings:');
+      warnings.forEach((w) => console.warn(`   • ${w}`));
+    }
+  }
+
   // Log validation success in development
   if (process.env.NODE_ENV === 'development') {
     console.log('✓ Environment variables validated');
@@ -53,8 +70,8 @@ validateEnv();
 export const env = {
   // Required for authentication and database
   DATABASE_URL: process.env.DATABASE_URL!,
-  NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET!,
-  NEXTAUTH_URL: process.env.NEXTAUTH_URL!,
+  AUTH_SECRET: process.env.AUTH_SECRET!,
+  AUTH_URL: process.env.AUTH_URL!,
   ALLOWED_EMAILS: process.env.ALLOWED_EMAILS!,
 
   // App config

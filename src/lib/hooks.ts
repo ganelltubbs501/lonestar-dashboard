@@ -87,16 +87,33 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
   if (!res.ok) {
     let msg = `Request failed (${res.status})`;
     try {
-      const data = await res.json();
-      if (data?.error) msg = data.error;
+      const text = await res.text();
+      if (text) {
+        console.error("API error response:", text.slice(0, 2000));
+      }
+      if (text) {
+        try {
+          const data = JSON.parse(text);
+          if (data?.error) msg = data.error;
+        } catch {
+          msg = `${msg}: ${text.slice(0, 300)}`;
+        }
+      }
     } catch {
-      // ignore JSON parse errors
+      // ignore parse errors
     }
     throw new Error(msg);
   }
 
-  const json = await res.json();
-  return json.data;
+  const text = await res.text();
+  if (!text) return null as T;
+  try {
+    const json = JSON.parse(text);
+    return json.data;
+  } catch {
+    console.error("API unexpected response:", text.slice(0, 2000));
+    return text as unknown as T;
+  }
 }
 
 export const api = {
