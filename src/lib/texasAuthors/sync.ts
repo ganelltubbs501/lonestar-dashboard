@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { fetchSheetValues, getAllSheetNames } from "@/lib/googleSheets";
+import logger from "@/lib/logger";
 
 /**
  * Texas Authors sync (Google Sheets -> Postgres)
@@ -84,6 +85,8 @@ export async function syncTexasAuthorsFromSheet(args: {
   // 1) Pull raw grid
   const values = await fetchSheetValues(spreadsheetId, range);
 
+  logger.info({ spreadsheetId, range, totalRows: values?.length ?? 0 }, "[TexasAuthors Sync] fetched sheet");
+
   if (!values || values.length < 2) {
     return {
       ok: true,
@@ -98,8 +101,7 @@ export async function syncTexasAuthorsFromSheet(args: {
   // 2) Normalize headers
   const headers = values[0].map((h) => norm(String(h)));
 
-  // Debug: this is the fastest way to confirm header mismatch
-  console.log("[TexasAuthors Sync] headers:", headers);
+  logger.info({ spreadsheetId, range, headers: headers.join(" | ") }, "[TexasAuthors Sync] headers");
 
   const dataRows = values.slice(1);
 
@@ -124,7 +126,7 @@ export async function syncTexasAuthorsFromSheet(args: {
     }
 
     const name = buildName(row);
-    const email = getAny(row, ["Email", "Email Address", "E-mail"]);
+    const email = lower(getAny(row, ["Email", "Email Address", "E-mail"])) || "";
     const phone = getAny(row, ["Phone", "Phone Number", "Mobile"]);
     const website = getAny(row, ["Website", "Site", "URL", "Link"]);
     const city = getAny(row, ["City", "Town"]);
@@ -156,33 +158,59 @@ export async function syncTexasAuthorsFromSheet(args: {
 
     const existing = await prisma.texasAuthor.findUnique({
       where: { externalKey },
-      select: { id: true },
+      select: { id: true, name: true, email: true, phone: true, website: true, city: true, state: true, notes: true, contacted: true, sourceRef: true },
     });
+
+    const incomingName = name || email || externalKey;
+    const incomingEmail = email || null;
+    const incomingPhone = phone || null;
+    const incomingWebsite = website || null;
+    const incomingCity = city || null;
+    const incomingState = state || null;
+    const incomingNotes = notes || null;
+    const incomingSourceRef = sourceRef || null;
+
+    // Skip if nothing changed
+    if (
+      existing &&
+      existing.name === incomingName &&
+      existing.email === incomingEmail &&
+      existing.phone === incomingPhone &&
+      existing.website === incomingWebsite &&
+      existing.city === incomingCity &&
+      existing.state === incomingState &&
+      existing.notes === incomingNotes &&
+      existing.contacted === contacted &&
+      existing.sourceRef === incomingSourceRef
+    ) {
+      skipped++;
+      continue;
+    }
 
     await prisma.texasAuthor.upsert({
       where: { externalKey },
       create: {
         externalKey,
-        name: name || email || externalKey,
-        email: email || null,
-        phone: phone || null,
-        website: website || null,
-        city: city || null,
-        state: state || null,
-        notes: notes || null,
-        contacted: contacted,
-        sourceRef: sourceRef || null,
+        name: incomingName,
+        email: incomingEmail,
+        phone: incomingPhone,
+        website: incomingWebsite,
+        city: incomingCity,
+        state: incomingState,
+        notes: incomingNotes,
+        contacted,
+        sourceRef: incomingSourceRef,
       },
       update: {
-        name: name || email || externalKey,
-        email: email || null,
-        phone: phone || null,
-        website: website || null,
-        city: city || null,
-        state: state || null,
-        notes: notes || null,
-        contacted: contacted,
-        sourceRef: sourceRef || null,
+        name: incomingName,
+        email: incomingEmail,
+        phone: incomingPhone,
+        website: incomingWebsite,
+        city: incomingCity,
+        state: incomingState,
+        notes: incomingNotes,
+        contacted,
+        sourceRef: incomingSourceRef,
         updatedAt: new Date(),
       },
     });
@@ -192,10 +220,8 @@ export async function syncTexasAuthorsFromSheet(args: {
   }
 
   const finishedAt = new Date();
+  const durationMs = finishedAt.getTime() - startedAt.getTime();
 
-  // 4) Record the run (so your UI can show history)
-  // If this model exists in your schema (it does, based on your logs), this will work.
-  // If you renamed it, comment this block out.
   await prisma.sheetsImportRun.create({
     data: {
       kind: "TEXAS_AUTHORS",
@@ -206,11 +232,24 @@ export async function syncTexasAuthorsFromSheet(args: {
       updated,
       skipped,
       error: null,
+      startedAt,
+      finishedAt,
+      durationMs,
       createdAt: startedAt,
     },
   });
 
-  console.log("[TexasAuthors Sync] done:", { inserted, updated, skipped });
+  logger.info({
+    kind: "TEXAS_AUTHORS",
+    spreadsheetId,
+    range,
+    rowCount: dataRows.length,
+    inserted,
+    updated,
+    skipped,
+    durationMs,
+    status: "SUCCESS",
+  }, "[TexasAuthors Sync] tab done");
 
   return {
     ok: true,
@@ -234,9 +273,17 @@ export async function syncTexasAuthors() {
     throw new Error("Missing required env var: GOOGLE_SHEETS_SPREADSHEET_ID");
   }
 
-  // Get all sheet names from the spreadsheet
-  const sheetNames = await getAllSheetNames(spreadsheetId);
-  console.log(`[TexasAuthors Sync] Found ${sheetNames.length} tabs:`, sheetNames);
+  // Get all sheet names, excluding tabs explicitly marked as "don't use"
+  const allSheetNames = await getAllSheetNames(spreadsheetId);
+  const sheetNames = allSheetNames.filter(
+    (name) => !name.toLowerCase().includes("don't use") && !name.toLowerCase().includes("dont use")
+  );
+
+  const skippedTabs = allSheetNames.filter((n) => !sheetNames.includes(n));
+  if (skippedTabs.length) {
+    logger.info({ skippedTabs }, `[TexasAuthors Sync] Skipping ${skippedTabs.length} tab(s)`);
+  }
+  logger.info({ tabs: sheetNames }, `[TexasAuthors Sync] Syncing ${sheetNames.length} tabs`);
 
   let totalInserted = 0;
   let totalUpdated = 0;
@@ -248,7 +295,7 @@ export async function syncTexasAuthors() {
   // Sync each sheet
   for (const sheetName of sheetNames) {
     try {
-      console.log(`[TexasAuthors Sync] Processing tab: ${sheetName}`);
+      logger.info({ sheetName }, "[TexasAuthors Sync] processing tab");
       const result = await syncTexasAuthorsFromSheet({
         spreadsheetId,
         range: `'${sheetName}'!A:Z`,
@@ -268,15 +315,48 @@ export async function syncTexasAuthors() {
         rows: result.rows,
       });
     } catch (error) {
-      console.error(`[TexasAuthors Sync] Error processing tab ${sheetName}:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error({ sheetName, error: { message: errorMessage, stack: error instanceof Error ? error.stack : undefined } }, "[TexasAuthors Sync] tab error");
+
+      // Log a FAILED import run so the UI can surface it
+      const tabFailedAt = new Date();
+      await prisma.sheetsImportRun.create({
+        data: {
+          kind: "TEXAS_AUTHORS",
+          spreadsheetId,
+          range: `'${sheetName}'!A:Z`,
+          status: "FAILED",
+          inserted: 0,
+          updated: 0,
+          skipped: 0,
+          error: errorMessage,
+          startedAt: tabFailedAt,
+          finishedAt: tabFailedAt,
+          durationMs: 0,
+        },
+      }).catch(() => {}); // don't let logging failure mask the real error
+
       sheetResults.push({
         sheetName,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
     }
   }
 
   const finishedAt = new Date();
+  const totalDurationMs = finishedAt.getTime() - startedAt.getTime();
+
+  logger.info({
+    kind: "TEXAS_AUTHORS",
+    spreadsheetId,
+    tabs: sheetNames.length,
+    rows: totalRows,
+    inserted: totalInserted,
+    updated: totalUpdated,
+    skipped: totalSkipped,
+    durationMs: totalDurationMs,
+    status: "SUCCESS",
+  }, "[TexasAuthors Sync] all tabs done");
 
   return {
     ok: true,

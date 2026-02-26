@@ -50,6 +50,12 @@ For production deployments, ensure all variables are defined.
     if (!process.env.GHL_WEBHOOK_SECRET) {
       warnings.push('GHL_WEBHOOK_SECRET not set - webhook signature verification disabled');
     }
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) {
+      warnings.push('GOOGLE_SERVICE_ACCOUNT_JSON not set - Texas Authors sync will fail');
+    }
+    if (!process.env.GOOGLE_SHEETS_SPREADSHEET_ID) {
+      warnings.push('GOOGLE_SHEETS_SPREADSHEET_ID not set - Texas Authors sync will fail');
+    }
 
     if (warnings.length > 0) {
       console.warn('⚠️  Production environment warnings:');

@@ -102,6 +102,19 @@ export function WorkItemModal({ itemId, onClose, onUpdate }: Props) {
     onUpdate();
   };
 
+  const handleDueDateChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    await api.workItems.update(itemId, { dueAt: value ? new Date(value).toISOString() : null });
+    refetch();
+    onUpdate();
+  };
+
+  const handlePriorityChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    await api.workItems.update(itemId, { priority: e.target.value });
+    refetch();
+    onUpdate();
+  };
+
   const toggleSubtask = async (subtaskId: string, currentlyCompleted: boolean) => {
     await api.subtasks.toggle(subtaskId, !currentlyCompleted);
     refetch();
@@ -188,6 +201,33 @@ export function WorkItemModal({ itemId, onClose, onUpdate }: Props) {
                   </option>
                 ))}
               </select>
+              {(() => {
+                const NEXT: { [k: string]: { label: string; next: WorkItemStatus } } = {
+                  READY:       { label: 'Start →',           next: WorkItemStatus.IN_PROGRESS },
+                  IN_PROGRESS: { label: 'Send for Review →', next: WorkItemStatus.IN_REVIEW },
+                  IN_REVIEW:   { label: 'Mark Needs QA →',   next: WorkItemStatus.NEEDS_QA },
+                  NEEDS_QA:    { label: 'Mark Done ✓',       next: WorkItemStatus.DONE },
+                };
+                const advance = NEXT[item.status];
+                if (!advance) return null;
+                return (
+                  <button
+                    onClick={async () => {
+                      setStatusError(null);
+                      try {
+                        await api.workItems.update(itemId, { status: advance.next });
+                        refetch();
+                        onUpdate();
+                      } catch (err) {
+                        setStatusError(err instanceof Error ? err.message : 'Status change failed');
+                      }
+                    }}
+                    className="mt-1 text-xs text-indigo-600 hover:text-indigo-800 hover:underline"
+                  >
+                    {advance.label}
+                  </button>
+                );
+              })()}
             </div>
             <div>
               <label className="text-xs text-gray-500 font-medium block mb-1">Owner</label>
@@ -256,6 +296,11 @@ export function WorkItemModal({ itemId, onClose, onUpdate }: Props) {
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4" /> Subtasks
+                {item.subtasks.length > 0 && (
+                  <span className="text-xs font-normal text-gray-400">
+                    {item.subtasks.filter(t => t.completedAt).length}/{item.subtasks.length}
+                  </span>
+                )}
               </h3>
               <button
                 onClick={() => setShowAddSubtask(!showAddSubtask)}
@@ -264,6 +309,21 @@ export function WorkItemModal({ itemId, onClose, onUpdate }: Props) {
                 <Plus className="w-3 h-3" /> Add
               </button>
             </div>
+
+            {item.subtasks.length > 0 && (
+              <div className="mb-3">
+                <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-green-500 rounded-full transition-all"
+                    style={{
+                      width: `${Math.round(
+                        (item.subtasks.filter(t => t.completedAt).length / item.subtasks.length) * 100
+                      )}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
 
             {showAddSubtask && (
               <form onSubmit={addSubtask} className="mb-3 flex gap-2">
@@ -315,23 +375,32 @@ export function WorkItemModal({ itemId, onClose, onUpdate }: Props) {
 
           <div className="p-4 space-y-4 border-b border-gray-200">
             <div>
-              <label className="text-xs text-gray-500 font-bold uppercase">Due Date</label>
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-700 mt-1">
-                <Clock className="w-4 h-4 text-orange-500" />
-                {item.dueAt ? formatDate(item.dueAt) : 'No due date'}
+              <label className="text-xs text-gray-500 font-bold uppercase block mb-1">Due Date</label>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                <input
+                  type="date"
+                  defaultValue={item.dueAt ? item.dueAt.slice(0, 10) : ''}
+                  onChange={handleDueDateChange}
+                  className="text-sm text-gray-700 border border-gray-200 rounded px-2 py-1 w-full focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
               </div>
             </div>
             <div>
-              <label className="text-xs text-gray-500 font-bold uppercase">Priority</label>
-              <div
+              <label className="text-xs text-gray-500 font-bold uppercase block mb-1">Priority</label>
+              <select
+                value={item.priority}
+                onChange={handlePriorityChange}
                 className={cn(
-                  'inline-block px-2 py-1 rounded text-xs font-bold mt-1',
+                  'select text-xs font-bold',
                   PriorityColors[item.priority].bg,
                   PriorityColors[item.priority].text
                 )}
               >
-                {item.priority}
-              </div>
+                {Object.values(WorkItemPriority).map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
             </div>
             {item.blockedReason && (
               <div>

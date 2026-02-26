@@ -61,52 +61,91 @@ function getServiceAccount(): ServiceAccountJson {
   throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_FILE, GOOGLE_SERVICE_ACCOUNT_JSON, or GOOGLE_SERVICE_ACCOUNT_JSON_BASE64");
 }
 
+/** Run fn with a hard timeout. Rejects with a descriptive error if exceeded. */
+function withTimeout<T>(fn: () => Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`Google Sheets API call timed out after ${ms}ms`)),
+      ms
+    );
+    fn().then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
+
+/** Call fn once; on failure wait 2 s and retry once more. */
+async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (firstErr) {
+    await new Promise((r) => setTimeout(r, 2000));
+    return fn(); // second attempt — if this throws, let it propagate
+  }
+}
+
+/** Timeout per Google API call (30 s). */
+const SHEETS_TIMEOUT_MS = 30_000;
+
 export async function fetchSheetValues(spreadsheetId: string, range: string) {
-  const creds = getServiceAccount();
+  return withRetry(() =>
+    withTimeout(async () => {
+      const creds = getServiceAccount();
 
-  const auth = new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-  });
+      const auth = new google.auth.JWT({
+        email: creds.client_email,
+        key: creds.private_key,
+        scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+      });
 
-  const sheets = google.sheets({ version: "v4", auth });
+      const sheets = google.sheets({ version: "v4", auth });
 
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range,
-  });
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range,
+      });
 
-  return res.data.values ?? [];
+      return res.data.values ?? [];
+    }, SHEETS_TIMEOUT_MS)
+  );
 }
 
 export async function getSpreadsheetFirstSheetName(spreadsheetId: string) {
-  const creds = getServiceAccount();
+  return withRetry(() =>
+    withTimeout(async () => {
+      const creds = getServiceAccount();
 
-  const auth = new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-  });
+      const auth = new google.auth.JWT({
+        email: creds.client_email,
+        key: creds.private_key,
+        scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+      });
 
-  const sheets = google.sheets({ version: "v4", auth });
-  const res = await sheets.spreadsheets.get({ spreadsheetId });
-  return res.data.sheets?.[0]?.properties?.title || null;
+      const sheets = google.sheets({ version: "v4", auth });
+      const res = await sheets.spreadsheets.get({ spreadsheetId });
+      return res.data.sheets?.[0]?.properties?.title || null;
+    }, SHEETS_TIMEOUT_MS)
+  );
 }
 
 export async function getAllSheetNames(spreadsheetId: string): Promise<string[]> {
-  const creds = getServiceAccount();
+  return withRetry(() =>
+    withTimeout(async () => {
+      const creds = getServiceAccount();
 
-  const auth = new google.auth.JWT({
-    email: creds.client_email,
-    key: creds.private_key,
-    scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
-  });
+      const auth = new google.auth.JWT({
+        email: creds.client_email,
+        key: creds.private_key,
+        scopes: ["https://www.googleapis.com/auth/spreadsheets.readonly"],
+      });
 
-  const sheets = google.sheets({ version: "v4", auth });
-  const res = await sheets.spreadsheets.get({ spreadsheetId });
+      const sheets = google.sheets({ version: "v4", auth });
+      const res = await sheets.spreadsheets.get({ spreadsheetId });
 
-  return (res.data.sheets || [])
-    .map(sheet => sheet.properties?.title)
-    .filter((title): title is string => !!title);
+      return (res.data.sheets || [])
+        .map((sheet) => sheet.properties?.title)
+        .filter((title): title is string => !!title);
+    }, SHEETS_TIMEOUT_MS)
+  );
 }

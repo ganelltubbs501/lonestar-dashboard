@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
-import { successResponse, errorResponse, validationErrorResponse, withAuth } from '@/lib/api-utils';
+import { successResponse, errorResponse, validationErrorResponse, withAuth, withAdminAuth } from '@/lib/api-utils';
 import {
   updateWorkItemSchema,
   validateTbpMagazineForQA,
@@ -88,6 +88,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         tbpTxTie: true,
         tbpMagazineIssue: true,
         needsProofing: true,
+        startedAt: true,
       },
     });
 
@@ -183,6 +184,26 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       updateData.tbpMagazineIssue = result.data.tbpMagazineIssue;
     }
 
+    // Audit fields — always stamp who updated, and when status/owner changed
+    updateData.updatedById = userId;
+    if (result.data.status !== undefined && result.data.status !== existing.status) {
+      updateData.statusChangedAt = new Date();
+      const ns = result.data.status;
+      // Lifecycle: stamp startedAt once (first IN_PROGRESS), completedAt on DONE
+      if (ns === WorkItemStatus.IN_PROGRESS && !existing.startedAt) {
+        updateData.startedAt = new Date();
+      }
+      if (ns === WorkItemStatus.DONE) {
+        updateData.completedAt = new Date();
+      }
+      if (existing.status === WorkItemStatus.DONE && ns !== WorkItemStatus.DONE) {
+        updateData.completedAt = null; // reopened — clear completedAt
+      }
+    }
+    if (result.data.ownerId !== undefined && result.data.ownerId !== existing.ownerId) {
+      updateData.ownerChangedAt = new Date();
+    }
+
     const item = await prisma.workItem.update({
       where: { id },
       data: updateData,
@@ -217,9 +238,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   });
 }
 
-// DELETE /api/work-items/[id] - Delete a work item
+// DELETE /api/work-items/[id] - Delete a work item (ADMIN only)
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return withAuth(async (userId) => {
+  return withAdminAuth(async (userId) => {
     const { id } = await params;
 
     const existing = await prisma.workItem.findUnique({

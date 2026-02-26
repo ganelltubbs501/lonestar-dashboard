@@ -21,7 +21,13 @@ COPY . .
 # 5. Build the Next.js application
 #    - Uses output: 'standalone' from next.config.ts
 #    - Creates .next/standalone with minimal node_modules
-RUN npm run build
+#    - Placeholder env vars satisfy validation at build time only;
+#      real values are injected by Cloud Run secrets at runtime.
+ENV DATABASE_URL=postgresql://placeholder/placeholder \
+    AUTH_SECRET=build-placeholder-secret-for-next-build \
+    AUTH_URL=https://placeholder.run.app \
+    ALLOWED_EMAILS=build@placeholder.local
+RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
 # =============================================================================
 # PRODUCTION STAGE
@@ -52,12 +58,13 @@ COPY --from=builder /app/.next/static ./.next/static
 # 4. Prisma schema (needed for migrations in production)
 COPY --from=builder /app/prisma ./prisma
 
-# 5. Generated Prisma Client (the query engine)
-#    This is the compiled client that talks to the database
+# 5. All @prisma/* packages (client, engines, CLI, debug, get-platform, etc.)
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
-# 6. Prisma client package (required alongside .prisma)
-COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+# 6. Prisma CLI and all accompanying .bin files (WASM, etc.)
+COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
+COPY --from=builder /app/node_modules/.bin/ ./node_modules/.bin/
 
 # 7. Package.json for prod:migrate script access
 COPY --from=builder /app/package.json ./package.json

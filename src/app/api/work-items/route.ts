@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
         { priority: 'desc' },
         { dueAt: 'asc' },
       ],
+      take: 200, // safety cap — board uses client-side filtering on this set
     });
 
     return successResponse(items);

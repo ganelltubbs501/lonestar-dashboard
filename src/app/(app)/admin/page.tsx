@@ -5,7 +5,10 @@ import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import { useFetch } from '@/lib/hooks';
 import { formatDateTime, cn } from '@/lib/utils';
-import { Shield, Zap, Activity, RefreshCw, AlertTriangle, FileText, Users, Key, Loader2, X } from 'lucide-react';
+import {
+  Shield, Zap, Activity, RefreshCw, AlertTriangle, FileText,
+  Users, Key, Loader2, X, Database, HeartPulse, CheckCircle2, XCircle,
+} from 'lucide-react';
 
 interface User {
   id: string;
@@ -24,9 +27,52 @@ interface IntegrationEvent {
   workItem: { id: string; title: string } | null;
 }
 
+interface SyncRun {
+  id: string;
+  kind: string;
+  spreadsheetId: string;
+  range: string;
+  status: 'SUCCESS' | 'FAILED';
+  inserted: number;
+  updated: number;
+  skipped: number;
+  error: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+interface SyncStatus {
+  recentRuns: SyncRun[];
+  lastRun: SyncRun | null;
+  hasRecentFailure: boolean;
+}
+
+interface CronRunLog {
+  id: string;
+  jobName: string;
+  status: 'success' | 'error';
+  result: Record<string, unknown> | null;
+  error: string | null;
+  durationMs: number | null;
+  createdAt: string;
+}
+
+interface HealthData {
+  checkedAt: string;
+  db: { ok: boolean; error: string | null };
+  lastSheetsSync: SyncRun | null;
+  lastRecurrence: CronRunLog | null;
+  lastTxSync: CronRunLog | null;
+  upcomingDeadlines: number | null;
+  revision: string | null;
+  service: string | null;
+}
+
 export default function AdminPage() {
   const { data: session } = useSession();
-  const [activeTab, setActiveTab] = useState<'users' | 'ghl'>('ghl');
+  const [activeTab, setActiveTab] = useState<'users' | 'ghl' | 'sync' | 'health'>('ghl');
   const [webhookJson, setWebhookJson] = useState(
     JSON.stringify(
       {
@@ -51,6 +97,8 @@ export default function AdminPage() {
 
   const { data: users, refetch: refetchUsers } = useFetch<User[]>('/api/users');
   const { data: integrationEvents, refetch: refetchEvents } = useFetch<IntegrationEvent[]>('/api/admin/integration-events');
+  const { data: syncStatus, refetch: refetchSync } = useFetch<SyncStatus>('/api/admin/sync-status');
+  const { data: health, refetch: refetchHealth } = useFetch<HealthData>('/api/admin/health');
 
   const handleRoleChange = async (userId: string, newRole: 'ADMIN' | 'STAFF') => {
     setChangingRoleUserId(userId);
@@ -148,6 +196,25 @@ export default function AdminPage() {
         </h1>
       </div>
 
+      {/* Global failure banner — always visible regardless of active tab */}
+      {syncStatus?.hasRecentFailure && (
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800">
+          <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-sm">Google Sheets sync failure detected in the last 24 hours</p>
+            {syncStatus.lastRun?.status === 'FAILED' && syncStatus.lastRun.error && (
+              <p className="text-xs text-red-700 mt-1 truncate">{syncStatus.lastRun.error}</p>
+            )}
+          </div>
+          <button
+            onClick={() => setActiveTab('sync')}
+            className="text-xs text-red-700 font-semibold underline shrink-0"
+          >
+            View details
+          </button>
+        </div>
+      )}
+
       <div className="flex gap-6 border-b border-gray-200 mb-6">
         <button
           className={`pb-3 text-sm font-medium border-b-2 transition flex items-center gap-1.5 ${
@@ -170,6 +237,33 @@ export default function AdminPage() {
         >
           <Users className="w-4 h-4" />
           User Management
+        </button>
+        <button
+          className={cn(
+            'pb-3 text-sm font-medium border-b-2 transition flex items-center gap-1.5',
+            activeTab === 'sync'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          )}
+          onClick={() => setActiveTab('sync')}
+        >
+          <Database className="w-4 h-4" />
+          Sync Runs
+          {syncStatus?.hasRecentFailure && (
+            <span className="ml-1 w-2 h-2 rounded-full bg-red-500 inline-block" />
+          )}
+        </button>
+        <button
+          className={cn(
+            'pb-3 text-sm font-medium border-b-2 transition flex items-center gap-1.5',
+            activeTab === 'health'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          )}
+          onClick={() => setActiveTab('health')}
+        >
+          <HeartPulse className="w-4 h-4" />
+          Health
         </button>
         <Link
           href="/admin/templates"
@@ -364,6 +458,223 @@ export default function AdminPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'sync' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold text-gray-800">Recent Sync Runs (last 20)</h3>
+            <button onClick={() => refetchSync()} className="text-gray-400 hover:text-gray-600">
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+
+          {!syncStatus?.recentRuns?.length ? (
+            <div className="card p-8 text-center text-gray-400 text-sm">No sync runs recorded yet.</div>
+          ) : (
+            <div className="card overflow-hidden">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Status</th>
+                    <th className="px-4 py-2 text-left">Tab / Range</th>
+                    <th className="px-4 py-2 text-right">Ins</th>
+                    <th className="px-4 py-2 text-right">Upd</th>
+                    <th className="px-4 py-2 text-right">Skip</th>
+                    <th className="px-4 py-2 text-right">Duration</th>
+                    <th className="px-4 py-2 text-right">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {syncStatus.recentRuns.map((run) => (
+                    <tr key={run.id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-2.5">
+                        <span
+                          className={cn(
+                            'px-2 py-0.5 rounded text-xs font-bold',
+                            run.status === 'SUCCESS'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          )}
+                        >
+                          {run.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 max-w-[240px]">
+                        <span className="truncate block text-gray-700" title={run.range}>
+                          {run.range}
+                        </span>
+                        {run.status === 'FAILED' && run.error && (
+                          <span className="text-xs text-red-600 block truncate" title={run.error}>
+                            {run.error}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-gray-600">{run.inserted}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-600">{run.updated}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-600">{run.skipped}</td>
+                      <td className="px-4 py-2.5 text-right text-gray-400 font-mono text-xs">
+                        {run.durationMs != null ? `${run.durationMs}ms` : '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-right text-gray-400 text-xs whitespace-nowrap">
+                        {formatDateTime(run.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'health' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold text-gray-800">System Health</h3>
+            <button onClick={() => refetchHealth()} className="text-gray-400 hover:text-gray-600">
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+
+          {!health ? (
+            <div className="card p-8 text-center text-gray-400 text-sm">Loading health data…</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* DB */}
+              <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  {health.db.ok
+                    ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    : <XCircle className="w-4 h-4 text-red-500" />}
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Database</span>
+                </div>
+                <p className={cn('text-sm font-semibold', health.db.ok ? 'text-green-700' : 'text-red-700')}>
+                  {health.db.ok ? 'Connected' : 'Error'}
+                </p>
+                {health.db.error && <p className="text-xs text-red-600 mt-1 truncate">{health.db.error}</p>}
+              </div>
+
+              {/* Last Sheets Sync */}
+              <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  {health.lastSheetsSync?.status === 'SUCCESS'
+                    ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    : health.lastSheetsSync?.status === 'FAILED'
+                    ? <XCircle className="w-4 h-4 text-red-500" />
+                    : <AlertTriangle className="w-4 h-4 text-gray-400" />}
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Last Sheets Sync</span>
+                </div>
+                {health.lastSheetsSync ? (
+                  <>
+                    <p className={cn('text-sm font-semibold',
+                      health.lastSheetsSync.status === 'SUCCESS' ? 'text-green-700' : 'text-red-700'
+                    )}>
+                      {health.lastSheetsSync.status}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      +{health.lastSheetsSync.inserted} ins · +{health.lastSheetsSync.updated} upd · {health.lastSheetsSync.skipped} skip
+                    </p>
+                    {health.lastSheetsSync.error && (
+                      <p className="text-xs text-red-600 mt-1 truncate" title={health.lastSheetsSync.error}>
+                        {health.lastSheetsSync.error}
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">{formatDateTime(health.lastSheetsSync.createdAt)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400">No runs yet</p>
+                )}
+              </div>
+
+              {/* Last Recurrence Run */}
+              <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  {health.lastRecurrence?.status === 'success'
+                    ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    : health.lastRecurrence?.status === 'error'
+                    ? <XCircle className="w-4 h-4 text-red-500" />
+                    : <AlertTriangle className="w-4 h-4 text-gray-400" />}
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Recurrence Engine</span>
+                </div>
+                {health.lastRecurrence ? (
+                  <>
+                    <p className={cn('text-sm font-semibold',
+                      health.lastRecurrence.status === 'success' ? 'text-green-700' : 'text-red-700'
+                    )}>
+                      {health.lastRecurrence.status === 'success' ? 'Success' : 'Error'}
+                    </p>
+                    {health.lastRecurrence.result && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        +{(health.lastRecurrence.result as any).created ?? '?'} created · {(health.lastRecurrence.result as any).skipped ?? '?'} skipped
+                      </p>
+                    )}
+                    {health.lastRecurrence.error && (
+                      <p className="text-xs text-red-600 mt-1 truncate">{health.lastRecurrence.error}</p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">{formatDateTime(health.lastRecurrence.createdAt)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400">No runs yet</p>
+                )}
+              </div>
+
+              {/* Upcoming Deadlines */}
+              <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle2 className="w-4 h-4 text-indigo-500" />
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Upcoming Deadlines (28d)</span>
+                </div>
+                <p className="text-3xl font-bold text-indigo-600">
+                  {health.upcomingDeadlines ?? '—'}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">editorial deadlines pre-generated</p>
+              </div>
+
+              {/* Texas Authors Sync */}
+              <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  {health.lastTxSync?.status === 'success'
+                    ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                    : health.lastTxSync?.status === 'error'
+                    ? <XCircle className="w-4 h-4 text-red-500" />
+                    : <AlertTriangle className="w-4 h-4 text-gray-400" />}
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">TX Authors Cron</span>
+                </div>
+                {health.lastTxSync ? (
+                  <>
+                    <p className={cn('text-sm font-semibold',
+                      health.lastTxSync.status === 'success' ? 'text-green-700' : 'text-red-700'
+                    )}>
+                      {health.lastTxSync.status === 'success' ? 'Success' : 'Error'}
+                    </p>
+                    {health.lastTxSync.result && (
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        +{(health.lastTxSync.result as any).inserted ?? '?'} ins · {(health.lastTxSync.result as any).rows ?? '?'} rows
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1">{formatDateTime(health.lastTxSync.createdAt)}</p>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400">No runs yet</p>
+                )}
+              </div>
+
+              {/* Cloud Run Info */}
+              <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Database className="w-4 h-4 text-gray-400" />
+                  <span className="text-xs font-bold text-gray-500 uppercase tracking-wide">Cloud Run</span>
+                </div>
+                <p className="text-sm font-mono text-gray-700 truncate" title={health.revision ?? undefined}>
+                  {health.revision ?? '(local)'}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">{health.service ?? 'ops-desktop'}</p>
+                <p className="text-xs text-gray-300 mt-1">checked {formatDateTime(health.checkedAt)}</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

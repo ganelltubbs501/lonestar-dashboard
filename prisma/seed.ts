@@ -78,7 +78,7 @@ if (demoUserIds.length) {
   await prisma.$transaction([
     prisma.comment.deleteMany({ where: { userId: { in: demoUserIds } } }),
     prisma.auditLog.deleteMany({ where: { userId: { in: demoUserIds } } }),
-    prisma.subtask.deleteMany({ where: { assigneeId: { in: demoUserIds } } }),
+    prisma.subtask.deleteMany({ where: { assigneeUserId: { in: demoUserIds } } }),
 
     // WorkItem relations: requesterId is NOT nullable, so delete those items
     prisma.workItem.deleteMany({ where: { requesterId: { in: demoUserIds } } }),
@@ -208,6 +208,20 @@ if (demoUserIds.length) {
         { title: "Create/update account" },
         { title: "Send credentials" },
         { title: "Confirm access" },
+      ],
+    },
+    {
+      name: "General / Magazine Item Default",
+      workItemType: WorkItemType.GENERAL,
+      description: "General task or magazine content item",
+      dueDaysOffset: 7,
+      subtasks: [
+        { title: "Confirm section placement" },
+        { title: "Collect content / assets from contributor" },
+        { title: "Edit and format" },
+        { title: "Proof and QC" },
+        { title: "Add to magazine layout" },
+        { title: "Final sign-off" },
       ],
     },
   ];

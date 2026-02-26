@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
-import { successResponse, errorResponse, withAuth } from '@/lib/api-utils';
+import { successResponse, errorResponse, withAuth, withAdminAuth } from '@/lib/api-utils';
 import { z } from 'zod';
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -100,9 +100,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
   });
 }
 
-// DELETE /api/events/[id]
+// DELETE /api/events/[id] - ADMIN only
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  return withAuth(async () => {
+  return withAdminAuth(async () => {
     const { id } = await params;
 
     const existing = await prisma.event.findUnique({

@@ -177,6 +177,15 @@ model WorkItem {
   linkedEvents      Event[]
   magazineItems     MagazineItem[]
 
+  // Light audit trail — denormalized for fast "who touched this last" lookups
+  updatedById     String?   // userId of last person to update (no FK constraint — just a string ref)
+  statusChangedAt DateTime? // timestamp of last status change
+  ownerChangedAt  DateTime? // timestamp of last owner reassignment
+
+  // Lifecycle timestamps for cycle-time / velocity analytics
+  startedAt   DateTime? // first time moved to IN_PROGRESS
+  completedAt DateTime? // most recent time moved to DONE (null if moved back)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -188,6 +197,9 @@ model WorkItem {
   @@index([needsProofing])
   @@index([waitingOnUserId])
   @@index([dueAt])
+  @@index([updatedAt])
+  @@index([completedAt])
+  @@index([startedAt])
 }
 
 // =============================================================================
@@ -337,6 +349,11 @@ model EditorialDeadline {
   // Link to work item that satisfies this deadline
   workItemId String?
   workItem   WorkItem? @relation(fields: [workItemId], references: [id])
+
+  // Stable idempotency key for auto-generated recurring deadlines.
+  // e.g. "NEWSLETTER_2026-03-03", "EVENTS_UPLOAD_2026-02-28"
+  // NULL for manually-created deadlines (PostgreSQL unique index allows multiple NULLs).
+  cadenceKey String? @unique
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -550,6 +567,23 @@ model MagazineItem {
 }
 
 // =============================================================================
+// CRON RUN LOG (generic job execution history)
+// =============================================================================
+
+model CronRunLog {
+  id         String   @id @default(uuid())
+  jobName    String   // "generate-deadlines" | "texas-authors-sync"
+  status     String   // "success" | "error"
+  result     Json?    // { created: 5, skipped: 30, ... }
+  error      String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([jobName])
+  @@index([createdAt])
+}
+
+// =============================================================================
 // GOOGLE SHEETS SYNC
 // =============================================================================
 
@@ -624,6 +658,9 @@ model SheetsImportRun {
   updated       Int      @default(0)
   skipped       Int      @default(0)
   error         String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  durationMs    Int?
   createdAt     DateTime @default(now())
 }
 

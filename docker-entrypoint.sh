@@ -26,18 +26,7 @@ fi
 
 echo "✓ Environment variables validated"
 
-# 2. Run database migrations
-# Use 'prisma migrate deploy' for production (idempotent, safer than push)
-echo ""
-echo "▶ Running database migrations..."
-if npx prisma migrate deploy; then
-  echo "✓ Database migrations completed successfully"
-else
-  echo "❌ Migration failed"
-  exit 1
-fi
-
-# 3. Start the application
+# 2. Start the application (migrations are run as a separate deploy step)
 echo ""
 echo "▶ Starting Next.js server..."
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

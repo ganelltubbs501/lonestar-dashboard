@@ -2,9 +2,10 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
+import { useSearchParams } from 'next/navigation';
 import { useFetch, api } from '@/lib/hooks';
 import { WorkItemTypeLabel, StatusLabel, formatDate, cn, isOverdue, parseTags } from '@/lib/utils';
-import { Calendar, Loader2, ClipboardCheck, AlertTriangle, Filter, X } from 'lucide-react';
+import { Calendar, Loader2, ClipboardCheck, AlertTriangle, Filter, X, User } from 'lucide-react';
 import { WorkItemStatus, WorkItemPriority, WorkItemType } from '@prisma/client';
 import { WorkItemModal } from '@/components/WorkItemModal';
 import { TBP_MAGAZINE_TYPES } from '@/lib/validations';
@@ -34,14 +35,40 @@ const PriorityLabel: Record<WorkItemPriority, string> = {
   URGENT: 'Urgent',
 };
 
+const TYPE_BADGE_COLORS: Record<WorkItemType, string> = {
+  BOOK_CAMPAIGN:             'bg-purple-100 text-purple-700',
+  SOCIAL_ASSET_REQUEST:      'bg-pink-100 text-pink-700',
+  SPONSORED_EDITORIAL_REVIEW:'bg-yellow-100 text-yellow-700',
+  TX_BOOK_PREVIEW_LEAD:      'bg-blue-100 text-blue-700',
+  WEBSITE_EVENT:             'bg-teal-100 text-teal-700',
+  ACCESS_REQUEST:            'bg-orange-100 text-orange-700',
+  GENERAL:                   'bg-gray-100 text-gray-600',
+};
+
+function dueCountdown(dueAt: string | null, status: WorkItemStatus): { text: string; cls: string } | null {
+  if (!dueAt) return null;
+  const days = Math.ceil((new Date(dueAt).getTime() - Date.now()) / 86400000);
+  if (status === 'DONE') return { text: `${days >= 0 ? days + 'd left' : 'past'}`, cls: 'text-gray-400 line-through' };
+  if (days < 0)  return { text: 'Overdue',      cls: 'text-red-600 font-bold' };
+  if (days === 0) return { text: 'Due today',   cls: 'text-orange-600 font-semibold' };
+  if (days <= 3)  return { text: `${days}d left`, cls: 'text-orange-500' };
+  if (days <= 7)  return { text: `${days}d left`, cls: 'text-yellow-700' };
+  return { text: `${days}d left`, cls: 'text-gray-500' };
+}
+
 export default function BoardPage() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
+
+  // Pre-populate filters from dashboard tile clicks
+  const [filterSearch, setFilterSearch] = useState('');
   const [filterOwner, setFilterOwner] = useState<string>('all');
-  const [filterType, setFilterType] = useState<string>('all');
+  const [filterType, setFilterType] = useState<string>(searchParams.get('type') ?? 'all');
   const [filterPriority, setFilterPriority] = useState<string>('all');
-  const [filterDueRange, setFilterDueRange] = useState<string>('all');
-  const [filterOverdue, setFilterOverdue] = useState(false);
-  const [filterBlocked, setFilterBlocked] = useState(false);
+  const [filterDueRange, setFilterDueRange] = useState<string>(searchParams.get('due7') ? '7days' : 'all');
+  const [filterOverdue, setFilterOverdue] = useState(searchParams.get('overdue') === '1');
+  const [filterBlocked, setFilterBlocked] = useState(searchParams.get('blocked') === '1');
+  const [filterWaiting, setFilterWaiting] = useState(searchParams.get('waiting') === '1');
   const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
   const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
   const [dropError, setDropError] = useState<string | null>(null);
@@ -85,20 +112,24 @@ export default function BoardPage() {
   };
 
   const clearAllFilters = () => {
+    setFilterSearch('');
     setFilterOwner('all');
     setFilterType('all');
     setFilterPriority('all');
     setFilterDueRange('all');
     setFilterOverdue(false);
     setFilterBlocked(false);
+    setFilterWaiting(false);
   };
 
-  const hasActiveFilters = filterOwner !== 'all' || filterType !== 'all' ||
-    filterPriority !== 'all' || filterDueRange !== 'all' || filterOverdue || filterBlocked;
+  const hasActiveFilters = filterSearch !== '' || filterOwner !== 'all' || filterType !== 'all' ||
+    filterPriority !== 'all' || filterDueRange !== 'all' || filterOverdue || filterBlocked || filterWaiting;
 
   const filteredItems = useMemo(() => {
     if (!items) return [];
     return items.filter((item) => {
+      // Text search
+      if (filterSearch && !item.title.toLowerCase().includes(filterSearch.toLowerCase())) return false;
       // Owner filter
       if (filterOwner !== 'all') {
         if (filterOwner === 'me' && item.owner?.id !== session?.user?.id) return false;
@@ -112,6 +143,9 @@ export default function BoardPage() {
       if (filterOverdue && (!item.dueAt || !isOverdue(item.dueAt) || item.status === 'DONE')) return false;
       // Blocked filter
       if (filterBlocked && item.status !== 'BLOCKED') return false;
+      // Waiting filter (items that have a waitingOnUserId — we show all statuses)
+      // Since WorkItem in the board list doesn't include waitingOnUserId, fall back to BLOCKED as proxy
+      if (filterWaiting && item.status !== 'BLOCKED') return false;
       // Due date range filter
       if (filterDueRange !== 'all' && item.dueAt) {
         const dueDate = new Date(item.dueAt);
@@ -131,7 +165,7 @@ export default function BoardPage() {
       }
       return true;
     });
-  }, [items, filterOwner, filterType, filterPriority, filterDueRange, filterOverdue, filterBlocked, session?.user?.id]);
+  }, [items, filterSearch, filterOwner, filterType, filterPriority, filterDueRange, filterOverdue, filterBlocked, filterWaiting, session?.user?.id]);
 
   const columns = Object.values(WorkItemStatus);
 
@@ -166,6 +200,25 @@ export default function BoardPage() {
       {/* Controls */}
       <div className="mb-4 space-y-3">
         <div className="flex gap-3 items-center flex-wrap">
+          <input
+            type="text"
+            placeholder="Search title…"
+            value={filterSearch}
+            onChange={(e) => setFilterSearch(e.target.value)}
+            className="input max-w-[200px]"
+          />
+          <button
+            onClick={() => setFilterOwner(filterOwner === 'me' ? 'all' : 'me')}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border transition",
+              filterOwner === 'me'
+                ? "bg-indigo-600 border-indigo-600 text-white"
+                : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+            )}
+          >
+            <User className="w-4 h-4" />
+            My Items
+          </button>
           <select
             className="select max-w-[160px]"
             value={filterOwner}
@@ -323,12 +376,16 @@ export default function BoardPage() {
                       className={cn(
                         'bg-white p-3 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition group relative',
                         item.priority === 'URGENT' && 'border-l-4 border-l-red-500',
+                        isOverdue(item.dueAt) && item.status !== 'DONE' && 'bg-red-50',
                         draggedItemId === item.id && 'opacity-50'
                       )}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                          <span className={cn(
+                            "text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded",
+                            TYPE_BADGE_COLORS[item.type]
+                          )}>
                             {WorkItemTypeLabel[item.type]}
                           </span>
                           {/* QA indicator for TBP/Magazine items */}
@@ -372,16 +429,16 @@ export default function BoardPage() {
                       )}
 
                       <div className="flex justify-between items-center text-xs text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          <span
-                            className={cn(
-                              isOverdue(item.dueAt) && item.status !== 'DONE' && 'text-red-600 font-bold'
-                            )}
-                          >
-                            {formatDate(item.dueAt)}
-                          </span>
-                        </div>
+                        {(() => {
+                          const cd = dueCountdown(item.dueAt, item.status);
+                          if (!cd) return <div />;
+                          return (
+                            <div className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              <span className={cd.cls}>{cd.text}</span>
+                            </div>
+                          );
+                        })()}
                         {item.owner && (
                           <div className="w-6 h-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[9px] font-bold text-gray-600">
                             {item.owner.name?.substring(0, 2) || '??'}

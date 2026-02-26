@@ -16,6 +16,7 @@ import {
   Inbox,
   BookOpen,
   Users,
+  BarChart2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -28,6 +29,7 @@ const navItems = [
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/magazine', label: 'Magazine', icon: BookOpen },
   { href: '/texas-authors', label: 'Texas Authors', icon: Users },
+  { href: '/metrics', label: 'Metrics', icon: BarChart2 },
   { href: '/trigger', label: 'New Trigger', icon: PlusCircle },
 ];
 

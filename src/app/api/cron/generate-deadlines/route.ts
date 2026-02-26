@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { syncTexasAuthors } from "@/lib/texasAuthors/sync";
+import { generateUpcomingDeadlines } from "@/lib/deadlines/generator";
 import { logCronRun } from "@/lib/cronLog";
 
 export async function POST(req: Request) {
@@ -11,31 +11,28 @@ export async function POST(req: Request) {
   const startedAt = Date.now();
 
   try {
-    const result = await syncTexasAuthors();
+    const result = await generateUpcomingDeadlines(35);
     const durationMs = Date.now() - startedAt;
 
     await logCronRun({
-      jobName: "texas-authors-sync",
+      jobName: "generate-deadlines",
       status: "success",
-      result: {
-        inserted: result.inserted,
-        updated: result.updated,
-        skipped: result.skipped,
-        rows: result.rows,
-        sheets: result.sheets.length,
-      },
+      result: { created: result.created, skipped: result.skipped },
       durationMs,
     });
 
     return NextResponse.json({ ok: true, result });
   } catch (e: any) {
     await logCronRun({
-      jobName: "texas-authors-sync",
+      jobName: "generate-deadlines",
       status: "error",
-      error: e?.message ?? "Sync failed",
+      error: e?.message ?? "Generation failed",
       durationMs: Date.now() - startedAt,
     });
 
-    return NextResponse.json({ ok: false, error: e?.message ?? "Sync failed" }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "Generation failed" },
+      { status: 500 }
+    );
   }
 }
