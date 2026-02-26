@@ -8,6 +8,7 @@ import { formatDateTime, cn } from '@/lib/utils';
 import {
   Shield, Zap, Activity, RefreshCw, AlertTriangle, FileText,
   Users, Key, Loader2, X, Database, HeartPulse, CheckCircle2, XCircle,
+  ShieldAlert, Check, Send,
 } from 'lucide-react';
 
 interface User {
@@ -72,7 +73,7 @@ interface HealthData {
 
 export default function AdminPage() {
   const { data: session } = useSession();
-  const [activeTab, setActiveTab] = useState<'users' | 'ghl' | 'sync' | 'health'>('ghl');
+  const [activeTab, setActiveTab] = useState<'users' | 'ghl' | 'sync' | 'health' | 'sla'>('ghl');
   const [webhookJson, setWebhookJson] = useState(
     JSON.stringify(
       {
@@ -99,6 +100,69 @@ export default function AdminPage() {
   const { data: integrationEvents, refetch: refetchEvents } = useFetch<IntegrationEvent[]>('/api/admin/integration-events');
   const { data: syncStatus, refetch: refetchSync } = useFetch<SyncStatus>('/api/admin/sync-status');
   const { data: health, refetch: refetchHealth } = useFetch<HealthData>('/api/admin/health');
+
+  // SLA rules editor state
+  interface SlaRuleAdmin {
+    id: string; workItemType: string; label: string;
+    targetDays: number | null; dueDateDriven: boolean;
+  }
+  const { data: slaRules, refetch: refetchSla } = useFetch<SlaRuleAdmin[]>('/api/admin/sla');
+  const [editingSlaType, setEditingSlaType] = useState<string | null>(null);
+  const [slaEditDays, setSlaEditDays] = useState<string>('');
+  const [slaEditDriven, setSlaEditDriven] = useState<boolean>(false);
+  const [slaEditLabel, setSlaEditLabel] = useState<string>('');
+  const [slaSaving, setSlaSaving] = useState(false);
+
+  const startSlaEdit = (rule: SlaRuleAdmin) => {
+    setEditingSlaType(rule.workItemType);
+    setSlaEditDays(rule.targetDays != null ? String(rule.targetDays) : '');
+    setSlaEditDriven(rule.dueDateDriven);
+    setSlaEditLabel(rule.label);
+  };
+
+  const [digestSending, setDigestSending] = useState(false);
+
+  const sendTestDigest = async () => {
+    setDigestSending(true);
+    try {
+      const res = await fetch('/api/admin/digest', { method: 'POST' });
+      const data = await res.json();
+      if (data.ok) {
+        const { sent, summary } = data;
+        alert(
+          `Digest sent!\n\n` +
+          `Email: ${sent.email ? '✅' : '❌ (check SMTP_HOST / DIGEST_TO)'}\n` +
+          `Slack: ${sent.slack ? '✅' : '❌ (check SLACK_WEBHOOK_URL)'}\n` +
+          `GHL:   ${sent.ghl ? '✅' : '❌ (check GHL_DIGEST_WEBHOOK_URL)'}\n\n` +
+          `Items: ${summary.overdue} overdue · ${summary.dueToday} due today · ` +
+          `${summary.dueSoon} due soon · ${summary.blockedOver3d} blocked >3d`
+        );
+      } else {
+        alert('Digest failed: ' + (data.error ?? 'Unknown error'));
+      }
+    } catch {
+      alert('Failed to send test digest');
+    } finally {
+      setDigestSending(false);
+    }
+  };
+
+  const saveSlaEdit = async () => {
+    if (!editingSlaType) return;
+    setSlaSaving(true);
+    await fetch(`/api/admin/sla/${editingSlaType}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetDays: slaEditDriven ? null : (slaEditDays ? Number(slaEditDays) : null),
+        dueDateDriven: slaEditDriven,
+        label: slaEditLabel,
+      }),
+    });
+    setSlaSaving(false);
+    setEditingSlaType(null);
+    refetchSla();
+  };
 
   const handleRoleChange = async (userId: string, newRole: 'ADMIN' | 'STAFF') => {
     setChangingRoleUserId(userId);
@@ -264,6 +328,18 @@ export default function AdminPage() {
         >
           <HeartPulse className="w-4 h-4" />
           Health
+        </button>
+        <button
+          className={cn(
+            'pb-3 text-sm font-medium border-b-2 transition flex items-center gap-1.5',
+            activeTab === 'sla'
+              ? 'border-indigo-600 text-indigo-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          )}
+          onClick={() => setActiveTab('sla')}
+        >
+          <ShieldAlert className="w-4 h-4" />
+          SLA Rules
         </button>
         <Link
           href="/admin/templates"
@@ -541,6 +617,7 @@ export default function AdminPage() {
           {!health ? (
             <div className="card p-8 text-center text-gray-400 text-sm">Loading health data…</div>
           ) : (
+            <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* DB */}
               <div className="card p-4">
@@ -674,7 +751,139 @@ export default function AdminPage() {
                 <p className="text-xs text-gray-300 mt-1">checked {formatDateTime(health.checkedAt)}</p>
               </div>
             </div>
+
+            {/* Daily Digest test trigger */}
+            <div className="card p-4 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-700">Daily Digest</p>
+                <p className="text-xs text-gray-500">Email · Slack · GHL — scheduled 08:00 CT daily</p>
+              </div>
+              <button
+                onClick={sendTestDigest}
+                disabled={digestSending}
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {digestSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                Send Test Digest
+              </button>
+            </div>
+            </>
           )}
+        </div>
+      )}
+
+      {activeTab === 'sla' && (
+        <div className="space-y-4">
+          <div className="card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold">SLA Rules</h3>
+              <p className="text-sm text-gray-500">Click Edit to modify. Changes apply immediately without a deploy.</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left font-medium text-gray-700">Label</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-700">Type</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-700">Target Days</th>
+                    <th className="px-4 py-2 text-left font-medium text-gray-700">Due-date Driven</th>
+                    <th className="px-4 py-2 text-right font-medium text-gray-700">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {slaRules?.map((rule) => (
+                    <tr key={rule.workItemType} className="border-t border-gray-100">
+                      {editingSlaType === rule.workItemType ? (
+                        <>
+                          <td className="px-4 py-2">
+                            <input
+                              className="border border-gray-300 rounded px-2 py-1 text-sm w-full"
+                              value={slaEditLabel}
+                              onChange={e => setSlaEditLabel(e.target.value)}
+                            />
+                          </td>
+                          <td className="px-4 py-2 text-gray-500 font-mono text-xs">{rule.workItemType}</td>
+                          <td className="px-4 py-2">
+                            <input
+                              type="number"
+                              disabled={slaEditDriven}
+                              className="border border-gray-300 rounded px-2 py-1 text-sm w-24 disabled:opacity-40"
+                              value={slaEditDays}
+                              onChange={e => setSlaEditDays(e.target.value)}
+                              placeholder="days"
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={slaEditDriven}
+                                onChange={e => setSlaEditDriven(e.target.checked)}
+                                className="w-4 h-4"
+                              />
+                              <span className="text-xs text-gray-500">use dueAt field</span>
+                            </label>
+                          </td>
+                          <td className="px-4 py-2 text-right space-x-2">
+                            <button
+                              onClick={saveSlaEdit}
+                              disabled={slaSaving}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 disabled:opacity-50"
+                            >
+                              {slaSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                              Save
+                            </button>
+                            <button
+                              onClick={() => setEditingSlaType(null)}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded hover:bg-gray-200"
+                            >
+                              <X className="w-3 h-3" /> Cancel
+                            </button>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="px-4 py-3 font-medium">{rule.label}</td>
+                          <td className="px-4 py-3 text-gray-500 font-mono text-xs">{rule.workItemType}</td>
+                          <td className="px-4 py-3">
+                            {rule.dueDateDriven ? (
+                              <span className="text-gray-400 italic">due-date driven</span>
+                            ) : (
+                              <span>{rule.targetDays ?? '—'} days</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            {rule.dueDateDriven ? (
+                              <span className="inline-flex items-center gap-1 text-indigo-600 text-xs font-medium">
+                                <Check className="w-3.5 h-3.5" /> Yes
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 text-xs">No</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={() => startSlaEdit(rule)}
+                              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                            >
+                              Edit
+                            </button>
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                  {!slaRules && (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
+                        <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -62,9 +62,11 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
-# 6. Prisma CLI and all accompanying .bin files (WASM, etc.)
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/.bin/ ./node_modules/.bin/
+# 6. Full node_modules from builder (needed by prisma CLI for migrations)
+#    Prisma 6.x pulled in @prisma/config which has a deep dep chain (effect →
+#    fast-check → pure-rand, c12 → giget → jiti → ...). Copying all of
+#    node_modules is simpler and more reliable than cherry-picking.
+COPY --from=builder /app/node_modules ./node_modules
 
 # 7. Package.json for prod:migrate script access
 COPY --from=builder /app/package.json ./package.json

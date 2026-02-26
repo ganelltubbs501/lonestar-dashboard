@@ -258,12 +258,13 @@ curl -X POST \
 
 ### Cron endpoint inventory
 
-Both endpoints require the `x-cron-secret` request header to match the `CRON_SYNC_SECRET` secret. They return `401` otherwise.
+All endpoints require the `x-cron-secret` request header to match the `CRON_SYNC_SECRET` secret. They return `401` otherwise.
 
 | Endpoint | Method | Purpose | Logs to |
 |---|---|---|---|
 | `/api/cron/generate-deadlines` | `POST` | Generates upcoming recurring editorial deadlines for the next 35 days | `CronRunLog` (job: `generate-deadlines`) |
 | `/api/cron/sync/texas-authors` | `POST` | Syncs all Texas Authors tabs from Google Sheets to PostgreSQL | `CronRunLog` (job: `texas-authors-sync`) + `SheetsImportRun` |
+| `/api/cron/digest` | `POST` | Sends daily ops digest — overdue, due today, due soon, blocked >3d — via Email + Slack + GHL | `CronRunLog` (job: `daily-digest`) |
 
 ### Recommended Cloud Scheduler setup
 
@@ -289,9 +290,47 @@ gcloud scheduler jobs create http texas-authors-sync \
   --http-method=POST \
   --headers="x-cron-secret=REPLACE_WITH_SECRET" \
   --attempt-deadline=120s
+
+# Create the daily digest job (runs daily at 14:00 UTC = 08:00 CT)
+gcloud scheduler jobs create http daily-digest \
+  --location=us-central1 \
+  --project=lonestar-dashboard \
+  --schedule="0 14 * * *" \
+  --uri="https://ops-desktop-41047594468.us-east5.run.app/api/cron/digest" \
+  --http-method=POST \
+  --headers="x-cron-secret=REPLACE_WITH_SECRET,Content-Type=application/json" \
+  --message-body="{}" \
+  --attempt-deadline=120s
 ```
 
 > **Note:** Replace `REPLACE_WITH_SECRET` with the actual value from Secret Manager. Cloud Scheduler does not natively support Secret Manager references in headers — you can use an intermediary Cloud Function or OIDC auth if you need dynamic secret injection.
+
+### Daily Digest — Setup
+
+The digest requires three new secrets added to Cloud Run:
+
+```bash
+# 1. Add the secrets to Secret Manager
+echo -n "you@example.com,other@example.com" | gcloud secrets create DIGEST_TO --data-file=- --project=lonestar-dashboard
+echo -n "https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK" | gcloud secrets create SLACK_WEBHOOK_URL --data-file=- --project=lonestar-dashboard
+echo -n "https://services.leadconnectorhq.com/hooks/YOUR_GHL_HOOK" | gcloud secrets create GHL_DIGEST_WEBHOOK_URL --data-file=- --project=lonestar-dashboard
+
+# 2. Grant Cloud Run access to the new secrets
+for SECRET in DIGEST_TO SLACK_WEBHOOK_URL GHL_DIGEST_WEBHOOK_URL; do
+  gcloud secrets add-iam-policy-binding $SECRET \
+    --member="serviceAccount:41047594468-compute@developer.gserviceaccount.com" \
+    --role="roles/secretmanager.secretAccessor" \
+    --project=lonestar-dashboard
+done
+
+# 3. Mount the secrets in the Cloud Run service
+gcloud run services update ops-desktop \
+  --region us-east5 \
+  --update-secrets="DIGEST_TO=DIGEST_TO:latest,SLACK_WEBHOOK_URL=SLACK_WEBHOOK_URL:latest,GHL_DIGEST_WEBHOOK_URL=GHL_DIGEST_WEBHOOK_URL:latest"
+```
+
+**Channels are individually optional** — each gracefully no-ops if its secret is not set.
+Test from Admin → Health tab → **"Send Test Digest"** before creating the Cloud Scheduler job.
 
 ### Monitoring job runs
 

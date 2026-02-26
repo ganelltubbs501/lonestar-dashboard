@@ -567,6 +567,56 @@ model MagazineItem {
 }
 
 // =============================================================================
+// CAMPAIGN MILESTONES
+// =============================================================================
+
+// type values: "SIGNUP_DEADLINE" | "GRAPHICS_DUE" | "FOLDER_TO_REVIEWERS" | "WRAP_UP"
+model CampaignMilestone {
+  id          String    @id @default(uuid())
+  workItemId  String
+  type        String    // one of the four milestone types above
+
+  plannedAt   DateTime? // target date set by team
+  completedAt DateTime? // when milestone was actually achieved
+  note        String?   // delay reason or free-form notes
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workItemId, type])
+  @@index([workItemId])
+  @@index([type, plannedAt])
+}
+
+// =============================================================================
+// SLA DEFINITIONS (configurable soft SLA targets per work item type)
+// =============================================================================
+
+model SlaDefinition {
+  id            String   @id @default(uuid())
+  workItemType  String   @unique   // matches WorkItemType enum string value
+  targetDays    Int?               // null when dueDateDriven = true
+  dueDateDriven Boolean  @default(false) // if true, use WorkItem.dueAt as deadline
+  label         String   // human-readable name e.g. "Social Graphics"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// =============================================================================
+// SER REMINDERS (dedup log for sponsored editorial review alerts)
+// =============================================================================
+
+model SerReminder {
+  id         String   @id @default(uuid())
+  workItemId String
+  type       String   // "DUE_7DAY" | "DUE_2DAY" | "OVERDUE"
+  sentAt     DateTime @default(now())
+
+  @@index([workItemId, type])
+  @@index([sentAt])
+}
+
+// =============================================================================
 // CRON RUN LOG (generic job execution history)
 // =============================================================================
 

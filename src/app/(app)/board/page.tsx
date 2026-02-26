@@ -28,6 +28,50 @@ interface WorkItem {
 
 const POLL_INTERVAL = 15000; // 15 seconds
 
+// SLA rule shape (from /api/sla)
+interface SlaRule {
+  workItemType:  string;
+  targetDays:    number | null;
+  dueDateDriven: boolean;
+}
+
+function slaBadge(
+  item: WorkItem,
+  rules: SlaRule[] | undefined,
+): React.ReactNode {
+  if (!rules || item.status === 'DONE') return null;
+  const rule = rules.find((r) => r.workItemType === item.type);
+  if (!rule) return null;
+
+  let deadline: Date | null = null;
+  if (rule.dueDateDriven) {
+    deadline = item.dueAt ? new Date(item.dueAt) : null;
+  } else if (rule.targetDays != null) {
+    // Board WorkItem doesn't expose createdAt — we skip SLA badge for these
+    // (the /sla page uses server-side SQL; board only shows dueAt-driven types)
+    return null;
+  }
+  if (!deadline) return null;
+
+  const now = Date.now();
+  const diff = deadline.getTime() - now;
+  if (diff < 0) {
+    return (
+      <span className="text-[9px] font-bold bg-red-100 text-red-700 px-1 py-0.5 rounded">
+        🔴 SLA
+      </span>
+    );
+  }
+  if (diff < 48 * 3600 * 1000) {
+    return (
+      <span className="text-[9px] font-bold bg-orange-100 text-orange-700 px-1 py-0.5 rounded">
+        🟡 SLA
+      </span>
+    );
+  }
+  return null;
+}
+
 const PriorityLabel: Record<WorkItemPriority, string> = {
   LOW: 'Low',
   MEDIUM: 'Medium',
@@ -81,6 +125,8 @@ export default function BoardPage() {
   } = useFetch<WorkItem[]>('/api/work-items', {
     pollInterval: POLL_INTERVAL,
   });
+
+  const { data: slaData } = useFetch<{ rules: SlaRule[] }>('/api/sla');
 
   const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedItemId(id);
@@ -402,6 +448,8 @@ export default function BoardPage() {
                               {item.needsProofing ? "QA" : "OK"}
                             </span>
                           )}
+                          {/* SLA badge — only for dueAt-driven types (board lacks createdAt) */}
+                          {slaBadge(item, slaData?.rules)}
                         </div>
                         {item.owner?.id === session?.user?.id && (
                           <div

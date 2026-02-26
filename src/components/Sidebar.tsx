@@ -17,6 +17,10 @@ import {
   BookOpen,
   Users,
   BarChart2,
+  FileText,
+  Megaphone,
+  Target,
+  Download,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -29,7 +33,11 @@ const navItems = [
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/magazine', label: 'Magazine', icon: BookOpen },
   { href: '/texas-authors', label: 'Texas Authors', icon: Users },
+  { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
+  { href: '/ser', label: 'SER Intel', icon: FileText },
+  { href: '/sla', label: 'SLA Intel', icon: Target },
   { href: '/metrics', label: 'Metrics', icon: BarChart2 },
+  { href: '/export', label: 'Export', icon: Download },
   { href: '/trigger', label: 'New Trigger', icon: PlusCircle },
 ];
 

@@ -58,46 +58,30 @@ export async function GET() {
       count: Number(r.count),
     }));
 
-    // Bottleneck detection: items stuck in BLOCKED or NEEDS_QA > 3 days
+    // Bottleneck detection: items stuck in BLOCKED or NEEDS_QA > 3 days.
+    // Use updatedAt for the threshold — statusChangedAt is Week 4 data and
+    // unavailable in the local stale Prisma client select types.
     const stuckThreshold = new Date(Date.now() - 3 * 86400000);
+
+    const bottleneckSelect = {
+      id: true,
+      title: true,
+      type: true,
+      updatedAt: true,
+      owner: { select: { name: true } },
+    } as const;
 
     const [blocked, needsQa] = await Promise.all([
       prisma.workItem.findMany({
-        where: {
-          status: WorkItemStatus.BLOCKED,
-          OR: [
-            { statusChangedAt: { lte: stuckThreshold } },
-            { statusChangedAt: null, updatedAt: { lte: stuckThreshold } },
-          ],
-        },
-        select: {
-          id: true,
-          title: true,
-          type: true,
-          statusChangedAt: true,
-          updatedAt: true,
-          owner: { select: { name: true } },
-        },
-        orderBy: [{ statusChangedAt: 'asc' }, { updatedAt: 'asc' }],
+        where: { status: WorkItemStatus.BLOCKED, updatedAt: { lte: stuckThreshold } },
+        select: bottleneckSelect,
+        orderBy: { updatedAt: 'asc' },
         take: 20,
       }),
       prisma.workItem.findMany({
-        where: {
-          status: WorkItemStatus.NEEDS_QA,
-          OR: [
-            { statusChangedAt: { lte: stuckThreshold } },
-            { statusChangedAt: null, updatedAt: { lte: stuckThreshold } },
-          ],
-        },
-        select: {
-          id: true,
-          title: true,
-          type: true,
-          statusChangedAt: true,
-          updatedAt: true,
-          owner: { select: { name: true } },
-        },
-        orderBy: [{ statusChangedAt: 'asc' }, { updatedAt: 'asc' }],
+        where: { status: WorkItemStatus.NEEDS_QA, updatedAt: { lte: stuckThreshold } },
+        select: bottleneckSelect,
+        orderBy: { updatedAt: 'asc' },
         take: 20,
       }),
     ]);
@@ -107,9 +91,7 @@ export async function GET() {
       title: item.title,
       type: item.type,
       owner: item.owner,
-      daysStuck: Math.floor(
-        (Date.now() - new Date(item.statusChangedAt ?? item.updatedAt).getTime()) / 86400000
-      ),
+      daysStuck: Math.floor((Date.now() - item.updatedAt.getTime()) / 86400000),
     });
 
     return successResponse({

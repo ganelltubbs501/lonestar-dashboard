@@ -14,6 +14,7 @@ import {
   Legend,
   ResponsiveContainer,
   Cell,
+  LabelList,
 } from 'recharts';
 import { TrendingUp, Clock, AlertTriangle, Users, Loader2 } from 'lucide-react';
 import { WorkItemType } from '@prisma/client';
@@ -62,6 +63,17 @@ interface OwnerRow {
 }
 interface OwnerData {
   owners: OwnerRow[];
+}
+
+interface SlaRule {
+  workItemType: string;
+  label:        string;
+  missedPct:    number | null;
+  breachCount:  number;
+}
+interface SlaData {
+  rules: SlaRule[];
+  summary: { totalBreach: number; totalDueSoon: number };
 }
 
 // ─── Color map (matches board TYPE_BADGE_COLORS hues) ────────────────────────
@@ -164,6 +176,7 @@ export default function MetricsPage() {
   const { data: velocity, isLoading: vl } = useFetch<VelocityData>('/api/metrics/velocity');
   const { data: cycle,    isLoading: cl } = useFetch<CycleData>('/api/metrics/cycle-time');
   const { data: load,     isLoading: ol } = useFetch<OwnerData>('/api/metrics/owner-load');
+  const { data: sla                      } = useFetch<SlaData>('/api/sla');
 
   if (vl || cl || ol) {
     return (
@@ -349,6 +362,54 @@ export default function MetricsPage() {
               </div>
             )}
           </div>
+        </Section>
+      )}
+
+      {/* SLA Breach Rates */}
+      {sla && (
+        <Section
+          title="SLA Breach Rates"
+          subtitle="% of completed items that finished after their soft SLA deadline"
+        >
+          {(() => {
+            const chartRows = sla.rules.filter((r) => r.missedPct !== null);
+            if (chartRows.length === 0) {
+              return <EmptyState message="No completed items with SLA data yet." />;
+            }
+            return (
+              <ResponsiveContainer width="100%" height={Math.max(160, chartRows.length * 44)}>
+                <BarChart
+                  data={chartRows}
+                  layout="vertical"
+                  margin={{ left: 110, right: 60, top: 4, bottom: 4 }}
+                >
+                  <XAxis type="number" domain={[0, 100]} tickFormatter={(v) => `${v}%`} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="label" tick={{ fontSize: 11 }} width={105} />
+                  <Tooltip
+                    formatter={(v: any) => [`${v}%`, 'Missed']}
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                  />
+                  <Bar dataKey="missedPct" radius={[0, 4, 4, 0]}>
+                    {chartRows.map((r, i) => (
+                      <Cell
+                        key={i}
+                        fill={
+                          (r.missedPct ?? 0) >= 40 ? '#ef4444' :
+                          (r.missedPct ?? 0) >= 20 ? '#f59e0b' : '#10b981'
+                        }
+                      />
+                    ))}
+                    <LabelList
+                      dataKey="missedPct"
+                      position="right"
+                      formatter={(v: any) => `${v}%`}
+                      style={{ fontSize: 11, fill: '#6b7280' }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            );
+          })()}
         </Section>
       )}
     </div>

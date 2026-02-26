@@ -76,7 +76,27 @@
       "Bash(gcloud iam service-accounts create:*)",
       "Bash(gcloud projects add-iam-policy-binding:*)",
       "Bash(gcloud sql instances list:*)",
-      "Bash(gcloud secrets describe:*)"
+      "Bash(gcloud secrets describe:*)",
+      "Bash(gcloud run jobs delete migrate-job --region us-east5 --project lonestar-dashboard --quiet)",
+      "Bash(gcloud run jobs create migrate-job --image gcr.io/lonestar-dashboard/ops-desktop:latest --region us-east5 --project lonestar-dashboard --set-secrets DATABASE_URL=DATABASE_URL:latest --command \"npx\" --args \"prisma,migrate,deploy\" --execute-now)",
+      "Bash(gcloud run jobs executions describe migrate-job-76498 --region us-east5 --project lonestar-dashboard --format=\"value\\(status.conditions[0].type,status.conditions[0].status\\)\")",
+      "Bash(gcloud run jobs executions describe migrate-job-76498 --region us-east5 --project lonestar-dashboard --format=\"value\\(status.conditions[0].type,status.conditions[0].status,status.succeededCount,status.failedCount\\)\")",
+      "Bash(gcloud run jobs executions describe migrate-job-45btx --region us-east5 --project lonestar-dashboard --format=\"value\\(status.conditions[0].type,status.conditions[0].status,status.succeededCount,status.failedCount\\)\")",
+      "Bash(gcloud run jobs executions describe migrate-job-vfd7t --region us-east5 --project lonestar-dashboard --format=\"value\\(status.conditions[0].type,status.conditions[0].status,status.succeededCount,status.failedCount\\)\")",
+      "Bash(gcloud run jobs executions describe migrate-job-vfd7t --region us-east5 --project lonestar-dashboard)",
+      "Bash(gcloud run jobs executions describe migrate-job-vfd7t --region us-east5 --project lonestar-dashboard --format=json)",
+      "Bash(gcloud run jobs executions describe migrate-job-m2qd6 --region us-east5 --project lonestar-dashboard --format=json)",
+      "Bash(gcloud run jobs create migrate-job --image gcr.io/lonestar-dashboard/ops-desktop:latest --region us-east5 --project lonestar-dashboard --set-secrets DATABASE_URL=DATABASE_URL:latest --add-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"npx\" --args \"prisma,migrate,deploy\" --execute-now)",
+      "Bash(gcloud run jobs create migrate-job --image gcr.io/lonestar-dashboard/ops-desktop:latest --region us-east5 --project lonestar-dashboard --set-secrets DATABASE_URL=DATABASE_URL:latest --set-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"npx\" --args \"prisma,migrate,deploy\" --execute-now)",
+      "Bash(gcloud run jobs executions describe migrate-job-w5fmq --region us-east5 --project lonestar-dashboard --format=json)",
+      "Bash(gcloud run jobs delete ops-desktop-migrate --region us-east5 --quiet)",
+      "Bash(gcloud run jobs create ops-desktop-migrate --image gcr.io/lonestar-dashboard/ops-desktop --region us-east5 --set-secrets=\"DATABASE_URL=DATABASE_URL:latest,AUTH_SECRET=AUTH_SECRET:latest,AUTH_URL=AUTH_URL:latest,ALLOWED_EMAILS=ALLOWED_EMAILS:latest\" --set-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"/bin/sh\" --args=\"-c,npx prisma migrate deploy\")",
+      "Bash(gcloud run jobs create ops-desktop-migrate --image gcr.io/lonestar-dashboard/ops-desktop --region us-east5 --set-secrets=\"DATABASE_URL=DATABASE_URL:latest\" --set-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"/bin/sh\" --args=\"-c,npx prisma migrate deploy\")",
+      "Bash(gcloud run jobs update ops-desktop-migrate --image gcr.io/lonestar-dashboard/ops-desktop --region us-east5 --set-secrets=\"DATABASE_URL=DATABASE_URL:latest\" --set-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"/bin/sh\" --args=\"-c,npx prisma migrate deploy\")",
+      "Bash(gcloud run jobs execute ops-desktop-migrate --region us-east5 --wait)",
+      "Bash(gcloud run jobs executions describe ops-desktop-migrate-pqp52 --region us-east5)",
+      "Bash(MSYS_NO_PATHCONV=1 gcloud run jobs update ops-desktop-migrate --image gcr.io/lonestar-dashboard/ops-desktop --region us-east5 --set-secrets=\"DATABASE_URL=DATABASE_URL:latest\" --set-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"/bin/sh\" --args=\"-c,npm run prod:migrate\")",
+      "Bash(gcloud run jobs update ops-desktop-migrate --image gcr.io/lonestar-dashboard/ops-desktop --region us-east5 --set-secrets=\"DATABASE_URL=DATABASE_URL:latest\" --set-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"//bin/sh\" --args=\"-c,npm run prod:migrate\")"
     ]
   }
 }
