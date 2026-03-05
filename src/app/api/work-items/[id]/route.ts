@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return validationErrorResponse(result.error);
     }
 
-    const existing = await prisma.workItem.findUnique({
+    const existing = await (prisma as any).workItem.findUnique({
       where: { id },
       select: {
         id: true,
