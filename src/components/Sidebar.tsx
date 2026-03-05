@@ -21,12 +21,14 @@ import {
   Megaphone,
   Target,
   Download,
+  Briefcase,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/executive', label: 'Executive', icon: Briefcase },
   { href: '/board', label: 'Work Board', icon: Kanban },
   { href: '/calendar', label: 'Editorial Calendar', icon: Calendar },
   { href: '/events', label: 'Events Pipeline', icon: CalendarDays },
