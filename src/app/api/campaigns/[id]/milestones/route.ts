@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/db';
 import { withAuth, successResponse, errorResponse } from '@/lib/api-utils';
-import { MILESTONE_TYPES } from '../../route';
+import { MILESTONE_TYPES } from '@/lib/campaign-types';
 
 // PATCH /api/campaigns/[id]/milestones
 // Body: { type, plannedAt?, completedAt?, note? }

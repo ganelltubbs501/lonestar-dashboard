@@ -129,6 +129,67 @@ export async function getSpreadsheetFirstSheetName(spreadsheetId: string) {
   );
 }
 
+export async function getSheetNameByGid(spreadsheetId: string, gid: number): Promise<string | null> {
+  return withRetry(() =>
+    withTimeout(async () => {
+      const creds = getServiceAccount();
+      const auth = new google.auth.JWT({
+        email: creds.client_email,
+        key: creds.private_key,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
+      });
+      const sheets = google.sheets({ version: 'v4', auth });
+      const res = await sheets.spreadsheets.get({ spreadsheetId });
+      const sheet = (res.data.sheets || []).find((s) => s.properties?.sheetId === gid);
+      return sheet?.properties?.title ?? null;
+    }, SHEETS_TIMEOUT_MS)
+  );
+}
+
+export async function appendSheetRow(spreadsheetId: string, sheetName: string, values: string[]): Promise<void> {
+  return withRetry(() =>
+    withTimeout(async () => {
+      const creds = getServiceAccount();
+      const auth = new google.auth.JWT({
+        email: creds.client_email,
+        key: creds.private_key,
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+      });
+      const sheets = google.sheets({ version: 'v4', auth });
+
+      // Read headers (row 1) to find the "Added" checkbox column
+      const headerRes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${sheetName}'!1:1`,
+      });
+      const headers = (headerRes.data.values?.[0] ?? []) as string[];
+      const addedIdx = headers.findIndex((h: string) => /\badded\b/i.test(h));
+
+      // Find first empty row by reading column A only (ignores checkbox-only rows)
+      const colARes = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${sheetName}'!A:A`,
+      });
+      // Sheets API trims trailing empty cells, so length = last row with data in col A
+      const nextRow = (colARes.data.values?.length ?? 1) + 1;
+
+      // Build row: user values + FALSE at the "Added" column if present
+      const rowValues = [...values];
+      if (addedIdx !== -1) {
+        while (rowValues.length < addedIdx) rowValues.push('');
+        rowValues[addedIdx] = 'FALSE';
+      }
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId,
+        range: `'${sheetName}'!A${nextRow}`,
+        valueInputOption: 'USER_ENTERED',
+        requestBody: { values: [rowValues] },
+      });
+    }, SHEETS_TIMEOUT_MS)
+  );
+}
+
 export async function getAllSheetNames(spreadsheetId: string): Promise<string[]> {
   return withRetry(() =>
     withTimeout(async () => {

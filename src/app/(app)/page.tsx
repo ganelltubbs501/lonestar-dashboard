@@ -5,7 +5,7 @@ import { formatDate, cn } from '@/lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import {
   AlertTriangle, Clock, CheckSquare, Loader2, BookOpen,
-  Calendar, RefreshCw, Users, ChevronRight,
+  Calendar, RefreshCw, Users, ChevronRight, Flag,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { WorkItemPriority } from '@prisma/client';
@@ -32,6 +32,7 @@ interface Stats {
   doneThisWeek: number;
   serUnassigned: number;
   serDueSoon: number;
+  upcomingMilestones: number;
   eventsUploadThisWeek: { id: string; title: string; dueAt: string; status: string } | null;
   spine14Days: SpineItem[];
   workloadByOwner: { name: string; count: number }[];
@@ -55,7 +56,7 @@ const DELIVERABLE_COLORS: Record<string, string> = {
 
 const DELIVERABLE_LABEL: Record<string, string> = {
   NEWSLETTER: 'Newsletter', MAGAZINE: 'Magazine', EVENTS: 'Events',
-  SER: 'SER', TBP: 'TBP', CAMPAIGN: 'Campaign',
+  SER: 'SPED', TBP: 'TBP', CAMPAIGN: 'Campaign',
   BOOK_CAMPAIGN: 'Book Campaign', SOCIAL_ASSET_REQUEST: 'Social Asset',
   SPONSORED_EDITORIAL_REVIEW: 'Editorial Review', TX_BOOK_PREVIEW_LEAD: 'TBP Lead',
   WEBSITE_EVENT: 'Event', ACCESS_REQUEST: 'Access', GENERAL: 'General',
@@ -146,7 +147,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Alert row — the "on fire" tiles */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <Tile
           label="Overdue"
           value={stats.overdueItems}
@@ -182,7 +183,7 @@ export default function DashboardPage() {
           href="/board?waiting=1"
         />
         <Tile
-          label="SER Queue"
+          label="SPED Queue"
           value={stats.serUnassigned + stats.serDueSoon}
           sub={`${stats.serUnassigned} unassigned · ${stats.serDueSoon} due soon`}
           valueColor="text-indigo-600"
@@ -190,6 +191,15 @@ export default function DashboardPage() {
           icon={<BookOpen className="w-5 h-5 text-indigo-500" />}
           href="/board?type=SPONSORED_EDITORIAL_REVIEW"
           pulse={stats.serUnassigned > 0}
+        />
+        <Tile
+          label="Milestones & Issues"
+          value={stats.upcomingMilestones}
+          sub="campaigns + magazine"
+          valueColor="text-violet-600"
+          bgColor="bg-violet-50"
+          icon={<Flag className="w-5 h-5 text-violet-500" />}
+          href="/campaigns"
         />
         <Tile
           label="Events Upload"

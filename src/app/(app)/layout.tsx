@@ -1,18 +1,12 @@
-import { redirect } from 'next/navigation';
-import { auth } from '@/lib/auth';
 import { Sidebar } from '@/components/Sidebar';
 
-export default async function AppLayout({
+export const dynamic = 'force-dynamic';
+
+export default function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
-
-  if (!session?.user) {
-    redirect('/auth/signin');
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 flex">
       <Sidebar />

@@ -19,7 +19,7 @@ const TRIGGER_OPTIONS: TriggerOption[] = [
   {
     key: 'BOOK_CAMPAIGN',
     type: WorkItemType.BOOK_CAMPAIGN,
-    label: 'New Book Campaign',
+    label: 'Book Campaign',
     desc: 'Launch a full marketing cycle for a new title.',
     icon: '📚',
   },
@@ -45,11 +45,11 @@ const TRIGGER_OPTIONS: TriggerOption[] = [
     icon: '🌟',
   },
   {
-    key: 'WEBSITE_EVENT',
+    key: 'WEBSITE_ADD',
     type: WorkItemType.WEBSITE_EVENT,
-    label: 'Website Event',
-    desc: 'Add event to the calendar.',
-    icon: '📅',
+    label: 'Add to Website',
+    desc: 'Add a bookstore, event, podcast, publisher, or editor to the website list.',
+    icon: '🌐',
   },
   {
     key: 'WEEKEND_EVENTS_POST',
@@ -111,6 +111,7 @@ export default function TriggerPage() {
 
   // Type-specific fields
   const [pubDate, setPubDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [campaignStartDate, setCampaignStartDate] = useState('');
   const [bookReceivedDate, setBookReceivedDate] = useState('');
   const [authorName, setAuthorName] = useState('');
@@ -121,6 +122,15 @@ export default function TriggerPage() {
   const [magazineIssue, setMagazineIssue] = useState('');
   const [magazineSection, setMagazineSection] = useState('Features');
 
+  // Add to Website fields
+  const [websiteCategory, setWebsiteCategory] = useState<string>('');
+  const [wsName, setWsName] = useState('');
+  const [wsCity, setWsCity] = useState('');
+  const [wsWebsite, setWsWebsite] = useState('');
+  const [wsEventDate, setWsEventDate] = useState('');
+  const [wsEmail, setWsEmail] = useState('');
+  const [wsServices, setWsServices] = useState('');
+
   const selectedOption = TRIGGER_OPTIONS.find((o) => o.key === selectedKey) ?? null;
   const selectedType = selectedOption?.type ?? null;
 
@@ -129,6 +139,7 @@ export default function TriggerPage() {
     setDescription('');
     setPriority(WorkItemPriority.MEDIUM);
     setPubDate('');
+    setEndDate('');
     setCampaignStartDate('');
     setBookReceivedDate('');
     setAuthorName('');
@@ -138,6 +149,13 @@ export default function TriggerPage() {
     setWeekendDate('');
     setMagazineIssue('');
     setMagazineSection('Features');
+    setWebsiteCategory('');
+    setWsName('');
+    setWsCity('');
+    setWsWebsite('');
+    setWsEventDate('');
+    setWsEmail('');
+    setWsServices('');
     setError(null);
   };
 
@@ -178,7 +196,8 @@ export default function TriggerPage() {
         const milestoneText = milestones
           .map((m) => `• ${m.title}: ${formatDate(m.date)}`)
           .join('\n');
-        workItemDescription = `${description}\n\n--- MILESTONES ---\n${milestoneText}`;
+        const endDateLine = endDate ? `\nEnd Date: ${formatDate(endDate)}` : '';
+        workItemDescription = `${description}${endDateLine}\n\n--- MILESTONES ---\n${milestoneText}`;
 
       } else if (selectedKey === 'SOCIAL_ASSET_REQUEST') {
         if (campaignStartDate) {
@@ -215,20 +234,42 @@ export default function TriggerPage() {
         due.setDate(due.getDate() + 14);
         dueAt = due.toISOString();
 
-      } else if (selectedKey === 'WEBSITE_EVENT') {
-        workItemTitle = title || `Event: ${eventVenue || 'TBD'}`;
-        const eventInfo = eventDate ? `Event Date: ${formatDate(eventDate)}` : '';
-        const venueInfo = eventVenue ? `Venue: ${eventVenue}` : '';
-        workItemDescription = `${[eventInfo, venueInfo].filter(Boolean).join('\n')}\n\n${description}`;
-        if (eventDate) {
-          const due = new Date(eventDate);
-          due.setDate(due.getDate() - 3);
-          dueAt = due.toISOString();
-        } else {
-          const due = new Date();
-          due.setDate(due.getDate() + 3);
-          dueAt = due.toISOString();
+      } else if (selectedKey === 'WEBSITE_ADD') {
+        if (!websiteCategory) {
+          setError('Please select a category');
+          setIsLoading(false);
+          return;
         }
+        if (!wsName) {
+          setError('Name is required');
+          setIsLoading(false);
+          return;
+        }
+
+        let values: string[] = [];
+        if (websiteCategory === 'Bookstores') {
+          values = [wsName, wsCity, wsWebsite];
+        } else if (websiteCategory === 'Major Events') {
+          values = [wsName, wsEventDate, wsWebsite];
+        } else if (websiteCategory === 'Podcasts') {
+          values = [wsName, wsWebsite];
+        } else if (websiteCategory === 'Publishers') {
+          values = [wsName, wsWebsite];
+        } else if (websiteCategory === 'Editors Etc') {
+          values = [wsName, wsEmail, wsWebsite, wsServices];
+        }
+
+        const res = await fetch('/api/website-updates/append', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sheet: websiteCategory, values }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error ?? 'Failed to save to spreadsheet');
+        }
+        router.push('/website-updates');
+        return;
 
       } else if (selectedKey === 'WEEKEND_EVENTS_POST') {
         tags = ['Weekend Events', 'Triggered'];
@@ -258,14 +299,57 @@ export default function TriggerPage() {
         dueAt = due.toISOString();
       }
 
-      await api.workItems.create({
+      const created = await api.workItems.create({
         type: selectedType,
         title: workItemTitle || `${WorkItemTypeLabel[selectedType]} Request`,
         description: workItemDescription,
         priority,
         dueAt,
         tags,
-      });
+      }) as { id: string } | null;
+
+      // For book campaigns, save CampaignMilestone records and add to Calendar
+      if (selectedKey === 'BOOK_CAMPAIGN' && pubDate && created?.id) {
+        const milestones = calculateMilestoneDates(pubDate);
+
+        // Map trigger offset days to the 4 CampaignMilestone types
+        const OFFSET_TO_TYPE: Record<number, string> = {
+          [-45]: 'SIGNUP_DEADLINE',
+          [-30]: 'GRAPHICS_DUE',
+          [-21]: 'FOLDER_TO_REVIEWERS',
+          [14]:  'WRAP_UP',
+        };
+
+        await Promise.allSettled([
+          // Save planned dates to CampaignMilestone table
+          ...milestones
+            .filter((m) => OFFSET_TO_TYPE[m.offsetDays])
+            .map((m) =>
+              fetch(`/api/campaigns/${created.id}/milestones`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: OFFSET_TO_TYPE[m.offsetDays],
+                  plannedAt: new Date(m.date + 'T12:00:00').toISOString(),
+                }),
+              })
+            ),
+          // Also add all milestones to Calendar
+          ...milestones.map((m) =>
+            fetch('/api/calendar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: 'CAMPAIGN',
+                title: `${workItemTitle || 'Book Campaign'}: ${m.title}`,
+                description: '',
+                dueAt: new Date(m.date + 'T12:00:00').toISOString(),
+                isRecurring: false,
+              }),
+            })
+          ),
+        ]);
+      }
 
       router.push('/board');
     } catch (err) {
@@ -330,7 +414,8 @@ export default function TriggerPage() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Title - always shown */}
+        {/* Title - hidden for WEBSITE_ADD */}
+        {selectedKey !== 'WEBSITE_ADD' && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Title / Reference Name
@@ -350,24 +435,41 @@ export default function TriggerPage() {
             }
           />
         </div>
+        )}
 
         {/* BOOK_CAMPAIGN specific fields */}
         {selectedKey === 'BOOK_CAMPAIGN' && (
           <>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Publication Date *
-              </label>
-              <input
-                type="date"
-                required
-                value={pubDate}
-                onChange={(e) => setPubDate(e.target.value)}
-                className="input"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Milestones will be calculated from this date.
-              </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Publication Date *
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={pubDate}
+                  onChange={(e) => setPubDate(e.target.value)}
+                  className="input"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Milestones will be calculated from this date.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="input"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Optional campaign end date.
+                </p>
+              </div>
             </div>
 
             {pubDate && (
@@ -438,7 +540,7 @@ export default function TriggerPage() {
                   value={authorName}
                   onChange={(e) => setAuthorName(e.target.value)}
                   className="input"
-                  placeholder="Jane Doe"
+                  placeholder="Author name"
                 />
               </div>
               <div>
@@ -450,7 +552,7 @@ export default function TriggerPage() {
                   value={bookTitle}
                   onChange={(e) => setBookTitle(e.target.value)}
                   className="input"
-                  placeholder="The Great Novel"
+                  placeholder="Book title"
                 />
               </div>
             </div>
@@ -468,31 +570,106 @@ export default function TriggerPage() {
           </>
         )}
 
-        {/* WEBSITE_EVENT specific fields */}
-        {selectedKey === 'WEBSITE_EVENT' && (
-          <div className="grid grid-cols-2 gap-4">
+        {/* WEBSITE_ADD specific fields */}
+        {selectedKey === 'WEBSITE_ADD' && (
+          <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Event Date
-              </label>
-              <input
-                type="date"
-                value={eventDate}
-                onChange={(e) => setEventDate(e.target.value)}
-                className="input"
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+              <select
+                value={websiteCategory}
+                onChange={(e) => { setWebsiteCategory(e.target.value); setWsName(''); setWsCity(''); setWsWebsite(''); setWsEventDate(''); setWsEmail(''); setWsServices(''); }}
+                className="select"
+                required
+              >
+                <option value="">Select a category…</option>
+                <option value="Bookstores">Bookstores</option>
+                <option value="Major Events">Major Events</option>
+                <option value="Podcasts">Podcasts</option>
+                <option value="Publishers">Publishers</option>
+                <option value="Editors Etc">Editors Etc</option>
+              </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Venue
-              </label>
-              <input
-                value={eventVenue}
-                onChange={(e) => setEventVenue(e.target.value)}
-                className="input"
-                placeholder="BookPeople, Austin"
-              />
-            </div>
+
+            {websiteCategory === 'Bookstores' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bookstore Name *</label>
+                  <input value={wsName} onChange={(e) => setWsName(e.target.value)} className="input" placeholder="e.g. BookPeople" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                  <input value={wsCity} onChange={(e) => setWsCity(e.target.value)} className="input" placeholder="e.g. Austin, TX" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                  <input value={wsWebsite} onChange={(e) => setWsWebsite(e.target.value)} className="input" placeholder="https://" />
+                </div>
+              </>
+            )}
+
+            {websiteCategory === 'Major Events' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Event Name *</label>
+                  <input value={wsName} onChange={(e) => setWsName(e.target.value)} className="input" placeholder="e.g. Texas Book Festival" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Event Date</label>
+                  <input value={wsEventDate} onChange={(e) => setWsEventDate(e.target.value)} className="input" placeholder="e.g. October 25" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                  <input value={wsWebsite} onChange={(e) => setWsWebsite(e.target.value)} className="input" placeholder="https://" />
+                </div>
+              </>
+            )}
+
+            {websiteCategory === 'Podcasts' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Podcast Name *</label>
+                  <input value={wsName} onChange={(e) => setWsName(e.target.value)} className="input" placeholder="e.g. The Bookish Life" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                  <input value={wsWebsite} onChange={(e) => setWsWebsite(e.target.value)} className="input" placeholder="https://" />
+                </div>
+              </>
+            )}
+
+            {websiteCategory === 'Publishers' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Publisher Name *</label>
+                  <input value={wsName} onChange={(e) => setWsName(e.target.value)} className="input" placeholder="e.g. University of Texas Press" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                  <input value={wsWebsite} onChange={(e) => setWsWebsite(e.target.value)} className="input" placeholder="https://" />
+                </div>
+              </>
+            )}
+
+            {websiteCategory === 'Editors Etc' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Name *</label>
+                  <input value={wsName} onChange={(e) => setWsName(e.target.value)} className="input" placeholder="Full name" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input type="email" value={wsEmail} onChange={(e) => setWsEmail(e.target.value)} className="input" placeholder="email@example.com" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                  <input value={wsWebsite} onChange={(e) => setWsWebsite(e.target.value)} className="input" placeholder="https://" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Services</label>
+                  <input value={wsServices} onChange={(e) => setWsServices(e.target.value)} className="input" placeholder="e.g. Copy editing, proofreading" />
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -546,34 +723,36 @@ export default function TriggerPage() {
           </div>
         )}
 
-        {/* Priority - always shown */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-          <select
-            value={priority}
-            onChange={(e) => setPriority(e.target.value as WorkItemPriority)}
-            className="select"
-          >
-            <option value={WorkItemPriority.LOW}>Low</option>
-            <option value={WorkItemPriority.MEDIUM}>Medium</option>
-            <option value={WorkItemPriority.HIGH}>High</option>
-            <option value={WorkItemPriority.URGENT}>Urgent</option>
-          </select>
-        </div>
-
-        {/* Description - always shown */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Additional Details
-          </label>
-          <textarea
-            rows={4}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="input"
-            placeholder="Provide context for the team..."
-          />
-        </div>
+        {/* Priority + Description - hidden for WEBSITE_ADD */}
+        {selectedKey !== 'WEBSITE_ADD' && (
+          <>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as WorkItemPriority)}
+                className="select"
+              >
+                <option value={WorkItemPriority.LOW}>Low</option>
+                <option value={WorkItemPriority.MEDIUM}>Medium</option>
+                <option value={WorkItemPriority.HIGH}>High</option>
+                <option value={WorkItemPriority.URGENT}>Urgent</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Additional Details
+              </label>
+              <textarea
+                rows={4}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="input"
+                placeholder="Provide context for the team..."
+              />
+            </div>
+          </>
+        )}
 
         {/* Submit buttons */}
         <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
@@ -590,7 +769,7 @@ export default function TriggerPage() {
             ) : (
               <Save className="w-4 h-4" />
             )}
-            Create Work Item
+            {selectedKey === 'WEBSITE_ADD' ? 'Save to Spreadsheet' : 'Create Work Item'}
           </button>
         </div>
       </form>

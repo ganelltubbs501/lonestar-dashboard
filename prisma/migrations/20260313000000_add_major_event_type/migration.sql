@@ -1,0 +1,1 @@
+ALTER TYPE "DeliverableType" ADD VALUE 'MAJOR_EVENT';

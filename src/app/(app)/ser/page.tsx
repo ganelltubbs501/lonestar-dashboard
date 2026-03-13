@@ -155,9 +155,9 @@ export default function SERPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">SER Intelligence</h1>
+        <h1 className="text-2xl font-bold text-gray-900">SPED Intelligence</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Sponsored Editorial Review pipeline health
+          Sponsored Editorial pipeline health
         </p>
       </div>
 
@@ -166,7 +166,7 @@ export default function SERPage() {
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
           <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
           <p className="text-sm text-red-800 font-medium">
-            {summary.overdue} SER {summary.overdue === 1 ? 'item is' : 'items are'} overdue.
+            {summary.overdue} SPED {summary.overdue === 1 ? 'item is' : 'items are'} overdue.
             {summary.unassigned > 0 && ` ${summary.unassigned} unassigned.`}
           </p>
         </div>
@@ -176,7 +176,7 @@ export default function SERPage() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <StatCard
           icon={<CalendarClock className="w-5 h-5 text-indigo-600" />}
-          label="Active SERs"
+          label="Active SPEDs"
           value={summary.totalActive}
         />
         <StatCard
@@ -216,7 +216,7 @@ export default function SERPage() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900">Active SER Items</h2>
+            <h2 className="text-sm font-semibold text-gray-900">Active SPED Items</h2>
             <p className="text-xs text-gray-500 mt-0.5">
               Sorted by urgency — overdue first
             </p>
@@ -225,7 +225,7 @@ export default function SERPage() {
         </div>
         {active.length === 0 ? (
           <div className="py-12 text-center text-sm text-gray-400">
-            No active SER items. All caught up!
+            No active SPED items. All caught up!
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -332,7 +332,7 @@ export default function SERPage() {
         {reminderLog.length === 0 ? (
           <div className="py-8 text-center text-sm text-gray-400">
             No reminders sent yet.
-            {' '}Reminders fire automatically when SERs approach or pass their due date.
+            {' '}Reminders fire automatically when SPEDs approach or pass their due date.
           </div>
         ) : (
           <div className="divide-y divide-gray-100">

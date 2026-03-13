@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 // ── CSV helpers ──────────────────────────────────────────────────────────────
@@ -25,11 +24,6 @@ function daysBetween(a: Date, b: Date) {
 // GET /api/export/work-items
 // Query params: type, status, ownerId (or "unassigned"), createdFrom, createdTo, dueFrom, dueTo
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-
   const { searchParams } = new URL(req.url);
   const type = searchParams.get('type');
   const status = searchParams.get('status');

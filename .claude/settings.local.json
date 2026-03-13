@@ -96,7 +96,30 @@
       "Bash(gcloud run jobs execute ops-desktop-migrate --region us-east5 --wait)",
       "Bash(gcloud run jobs executions describe ops-desktop-migrate-pqp52 --region us-east5)",
       "Bash(MSYS_NO_PATHCONV=1 gcloud run jobs update ops-desktop-migrate --image gcr.io/lonestar-dashboard/ops-desktop --region us-east5 --set-secrets=\"DATABASE_URL=DATABASE_URL:latest\" --set-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"/bin/sh\" --args=\"-c,npm run prod:migrate\")",
-      "Bash(gcloud run jobs update ops-desktop-migrate --image gcr.io/lonestar-dashboard/ops-desktop --region us-east5 --set-secrets=\"DATABASE_URL=DATABASE_URL:latest\" --set-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"//bin/sh\" --args=\"-c,npm run prod:migrate\")"
+      "Bash(gcloud run jobs update ops-desktop-migrate --image gcr.io/lonestar-dashboard/ops-desktop --region us-east5 --set-secrets=\"DATABASE_URL=DATABASE_URL:latest\" --set-cloudsql-instances lonestar-dashboard:us-east5:ops-desktop-dev --command \"//bin/sh\" --args=\"-c,npm run prod:migrate\")",
+      "Bash(gcloud run services describe ops-desktop --region us-east5 --project lonestar-dashboard --format=\"value\\(status.conditions\\)\")",
+      "Bash(gcloud logging read \"resource.type=cloud_run_revision AND resource.labels.service_name=ops-desktop AND severity>=ERROR\" --limit=20 --project=lonestar-dashboard --format=\"value\\(timestamp,textPayload,jsonPayload.message\\)\")",
+      "Bash(gcloud logging read \"resource.type=cloud_run_revision AND resource.labels.service_name=ops-desktop\" --limit=30 --project=lonestar-dashboard --format=\"table\\(timestamp,severity,textPayload,jsonPayload.message\\)\")",
+      "Bash(gcloud run services describe ops-desktop --region us-east5 --project lonestar-dashboard --format=\"value\\(spec.template.spec.containers[0].env\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(head -30 src/app/\\\\\\(app\\\\\\)/page.tsx)",
+      "Bash(gcloud logging read \"resource.type=cloud_run_revision AND resource.labels.service_name=ops-desktop AND severity>=ERROR\" --limit=10 --project=lonestar-dashboard --format=\"value\\(timestamp,textPayload,jsonPayload.message,jsonPayload.err.message\\)\")",
+      "Bash(gcloud run services describe ops-desktop --region us-east5 --project lonestar-dashboard --format=\"value\\(spec.template.metadata.annotations\\)\")",
+      "Bash(gcloud run services describe ops-desktop --region us-east5 --project lonestar-dashboard --format=\"value\\(spec.template.spec.serviceAccountName\\)\")",
+      "Bash(gcloud projects get-iam-policy lonestar-dashboard --flatten=\"bindings[].members\" --format=\"table\\(bindings.role\\)\" --filter=\"bindings.members:ops-desktop-runner@lonestar-dashboard.iam.gserviceaccount.com\")",
+      "Bash(xargs -I{} grep -L \"useSession\" /c/Users/ganel/Downloads/ops-desktop/src/app/\\\\\\(app\\\\\\)/executive/page.tsx)",
+      "Bash(cat /c/Users/ganel/Downloads/ops-desktop/src/app/\\\\\\(app\\\\\\)/executive/page.tsx)",
+      "Bash(gcloud run jobs executions describe migrate-job-wr45g --region us-east5 --project lonestar-dashboard --format=\"value\\(status.conditions[0].type,status.conditions[0].message\\)\")",
+      "Bash(gcloud run services describe ops-desktop --region us-east5 --project lonestar-dashboard --format=\"yaml\\(spec.template.spec.containers[0].env,spec.template.spec.containers[0].envFrom\\)\")",
+      "Bash(gcloud secrets list --project lonestar-dashboard --format=\"value\\(name\\)\")",
+      "Bash(gcloud services enable drive.googleapis.com --project lonestar-dashboard)",
+      "Bash(gcloud run jobs executions describe migrate-job-dv4dd --region us-east5 --project lonestar-dashboard --format=\"value\\(status.conditions[0].type,status.conditions[0].message\\)\")",
+      "Bash(grep -r \"loc_\\\\|cont_\\\\|newlead\\\\|Test Lead\\\\|Jane Doe\\\\|The Great Novel\\\\|BookPeople\\\\|February 2026\\\\|March 2026\" /c/Users/ganel/Downloads/ops-desktop/src --include=*.tsx --include=*.ts -n)",
+      "Bash(gcloud run:*)",
+      "Bash(gcloud logging:*)",
+      "Bash(python -c \"import sys,json; logs=json.load\\(sys.stdin\\); [print\\(e.get\\(''''timestamp'''',''''''''\\), e.get\\(''''jsonPayload'''',{}\\).get\\(''''msg'''',''''''''\\), e.get\\(''''jsonPayload'''',{}\\).get\\(''''err'''',''''''''\\), e.get\\(''''textPayload'''',''''''''\\)\\) for e in logs]\")",
+      "Bash(grep -n \"userId,\" src/app/api/work-items/[id]/route.ts src/app/api/admin/users/[id]/role/route.ts src/app/api/work-items/[id]/comments/route.ts src/app/api/work-items/[id]/messages/route.ts src/app/api/admin/users/[id]/password/route.ts)",
+      "Bash(grep -n \"userId || null\" src/app/api/work-items/route.ts src/app/api/work-items/[id]/route.ts src/app/api/work-items/[id]/comments/route.ts src/app/api/work-items/[id]/messages/route.ts)"
     ]
   }
 }

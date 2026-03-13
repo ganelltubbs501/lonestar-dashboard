@@ -60,7 +60,7 @@ interface SlaData {
 const TYPE_LABELS: Record<string, string> = {
   BOOK_CAMPAIGN:              'Book Campaign',
   SOCIAL_ASSET_REQUEST:       'Social Graphics',
-  SPONSORED_EDITORIAL_REVIEW: 'SER',
+  SPONSORED_EDITORIAL_REVIEW: 'SPED',
   TX_BOOK_PREVIEW_LEAD:       'TX Book Preview',
   WEBSITE_EVENT:              'Website Event',
   ACCESS_REQUEST:             'Access Request',

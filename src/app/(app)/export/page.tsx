@@ -12,7 +12,7 @@ interface User {
 
 const WORK_ITEM_TYPES = [
   { value: 'SOCIAL_ASSET_REQUEST', label: 'Social Graphics' },
-  { value: 'SPONSORED_EDITORIAL_REVIEW', label: 'SER' },
+  { value: 'SPONSORED_EDITORIAL_REVIEW', label: 'SPED' },
   { value: 'BOOK_CAMPAIGN', label: 'Book Campaign' },
   { value: 'WEBSITE_EVENT', label: 'Website Event' },
   { value: 'TX_BOOK_PREVIEW_LEAD', label: 'TX Book Preview' },
@@ -219,7 +219,7 @@ export default function ExportPage() {
       <div className="card p-6">
         <div className="flex items-center gap-2 mb-5">
           <FileSpreadsheet className="w-5 h-5 text-purple-500" />
-          <h2 className="text-lg font-semibold">Sponsored Editorial Reviews (SER)</h2>
+          <h2 className="text-lg font-semibold">Sponsored Editorial (SPED)</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
@@ -228,7 +228,7 @@ export default function ExportPage() {
             <select className={selectCls} value={serStatus} onChange={e => setSerStatus(e.target.value)}>
               <option value="active">Active only (not DONE)</option>
               <option value="DONE">Completed only</option>
-              <option value="all">All SERs</option>
+              <option value="all">All SPEDs</option>
             </select>
           </div>
 

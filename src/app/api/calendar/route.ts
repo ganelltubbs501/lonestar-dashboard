@@ -11,6 +11,7 @@ const createDeadlineSchema = z.object({
     'TBP',
     'EVENTS',
     'NEWSLETTER',
+    'MAJOR_EVENT',
   ]),
   title: z.string().min(1).max(200),
   description: z.string().max(2000).default(''),
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
 
     const deadline = await prisma.editorialDeadline.create({
       data: {
-        type: result.data.type,
+        type: result.data.type as any,
         title: result.data.title,
         description: result.data.description,
         dueAt: new Date(result.data.dueAt),

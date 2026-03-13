@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'Ops Desktop',
+  title: 'LSLL HUB',
   description: 'Internal operations management for publishing teams',
 };
 

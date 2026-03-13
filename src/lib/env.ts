@@ -6,9 +6,6 @@
 
 const requiredEnvVars = [
   'DATABASE_URL',
-  'AUTH_SECRET',
-  'AUTH_URL',
-  'ALLOWED_EMAILS',
 ];
 
 // Validate required environment variables at module load
@@ -74,12 +71,6 @@ validateEnv();
 
 // Export validated env object for type-safe access
 export const env = {
-  // Required for authentication and database
   DATABASE_URL: process.env.DATABASE_URL!,
-  AUTH_SECRET: process.env.AUTH_SECRET!,
-  AUTH_URL: process.env.AUTH_URL!,
-  ALLOWED_EMAILS: process.env.ALLOWED_EMAILS!,
-
-  // App config
   NODE_ENV: (process.env.NODE_ENV || 'development') as 'development' | 'production' | 'test',
 } as const;

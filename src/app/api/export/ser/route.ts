@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 const esc = (v: unknown) => {
@@ -22,11 +21,6 @@ function daysBetween(a: Date | null | undefined, b: Date | null | undefined) {
 // GET /api/export/ser
 // Query params: status (specific status | "active" | "all"), ownerId, createdFrom, createdTo
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-
   const { searchParams } = new URL(req.url);
   const status = searchParams.get('status');   // specific status, "active", "all", or null
   const ownerId = searchParams.get('ownerId');

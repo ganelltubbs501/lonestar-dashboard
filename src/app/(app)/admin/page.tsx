@@ -74,19 +74,7 @@ interface HealthData {
 export default function AdminPage() {
   const { data: session } = useSession();
   const [activeTab, setActiveTab] = useState<'users' | 'ghl' | 'sync' | 'health' | 'sla'>('ghl');
-  const [webhookJson, setWebhookJson] = useState(
-    JSON.stringify(
-      {
-        type: 'ContactCreate',
-        locationId: 'loc_123',
-        contactId: 'cont_abc',
-        email: 'newlead@test.com',
-        name: 'Test Lead',
-      },
-      null,
-      2
-    )
-  );
+  const [webhookJson, setWebhookJson] = useState('{}');
   const [isSimulating, setIsSimulating] = useState(false);
 
   // User management state

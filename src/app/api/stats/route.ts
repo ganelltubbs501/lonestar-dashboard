@@ -115,8 +115,20 @@ export async function GET() {
       count: o._count,
     }));
 
-    // 14-day spine: editorial deadlines + work items, merged and sorted
-    const [spineDeadlines, spineWorkItems] = await Promise.all([
+    const MILESTONE_LABEL: Record<string, string> = {
+      SIGNUP_DEADLINE:    'Signup Deadline',
+      GRAPHICS_DUE:       'Graphics Due',
+      FOLDER_TO_REVIEWERS:'To Reviewers',
+      WRAP_UP:            'Wrap-Up',
+    };
+
+    // 14-day spine: editorial deadlines + work items + campaign milestones + magazine issues
+    type MilestoneRow = {
+      id: string; type: string; planned_at: Date;
+      campaign_title: string; owner_name: string | null;
+    };
+
+    const [spineDeadlines, spineWorkItems, spineMilestones, spineMagazines] = await Promise.all([
       prisma.editorialDeadline.findMany({
         where: {
           dueAt: { gte: now, lte: in14Days },
@@ -138,6 +150,23 @@ export async function GET() {
         orderBy: { dueAt: 'asc' },
         take: 30,
       }),
+      prisma.$queryRaw<MilestoneRow[]>`
+        SELECT m.id, m.type, m."plannedAt" AS planned_at,
+               w.title AS campaign_title, u.name AS owner_name
+        FROM "CampaignMilestone" m
+        JOIN "WorkItem" w ON w.id = m."workItemId"
+        LEFT JOIN "User" u ON u.id = w."ownerId"
+        WHERE m."plannedAt" >= ${now} AND m."plannedAt" <= ${in14Days}
+          AND m."completedAt" IS NULL
+        ORDER BY m."plannedAt" ASC
+        LIMIT 20
+      `,
+      (prisma as any).magazineIssue.findMany({
+        where: { dueAt: { gte: now, lte: in14Days } },
+        select: { id: true, title: true, dueAt: true },
+        orderBy: { dueAt: 'asc' },
+        take: 10,
+      }) as Promise<{ id: string; title: string; dueAt: Date }[]>,
     ]);
 
     const spine14Days = [
@@ -160,6 +189,23 @@ export async function GET() {
         priority: w.priority,
         ownerName: w.owner?.name ?? null,
       })),
+      ...spineMilestones.map(m => ({
+        id: m.id,
+        kind: 'deadline' as const,
+        title: `${m.campaign_title} — ${MILESTONE_LABEL[m.type] ?? m.type}`,
+        deliverableType: 'CAMPAIGN',
+        dueAt: m.planned_at,
+        status: 'UPCOMING',
+        ownerName: m.owner_name ?? null,
+      })),
+      ...spineMagazines.map((m: { id: string; title: string; dueAt: Date }) => ({
+        id: m.id,
+        kind: 'deadline' as const,
+        title: `${m.title} — Issue Due`,
+        deliverableType: 'MAGAZINE',
+        dueAt: m.dueAt,
+        status: 'UPCOMING',
+      })),
     ].sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
 
     const payload = {
@@ -174,6 +220,8 @@ export async function GET() {
       // SER
       serUnassigned,
       serDueSoon,
+      // Upcoming campaign milestones + magazine issues in next 14 days
+      upcomingMilestones: spineMilestones.length + spineMagazines.length,
       // Events
       eventsUploadThisWeek,
       // Spine

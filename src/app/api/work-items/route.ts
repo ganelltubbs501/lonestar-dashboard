@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
         dueAt: dueAt ? new Date(dueAt) : template
           ? new Date(Date.now() + template.dueDaysOffset * 24 * 60 * 60 * 1000)
           : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        requesterId: userId,
+        ...(userId ? { requesterId: userId } : {}),
         ownerId: ownerId || null,
         tags: tags,
       },
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
     await prisma.auditLog.create({
       data: {
         workItemId: workItem.id,
-        userId,
+        userId: userId || null,
         action: 'created',
         meta: { title: workItem.title, type: workItem.type },
       },

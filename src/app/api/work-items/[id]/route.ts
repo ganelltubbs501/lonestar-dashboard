@@ -223,7 +223,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       await prisma.auditLog.create({
         data: {
           workItemId: id,
-          userId,
+          userId: userId || null,
           action,
           fromValue: changes.status?.from?.toString() || changes.ownerId?.from?.toString() || null,
           toValue: changes.status?.to?.toString() || changes.ownerId?.to?.toString() || null,

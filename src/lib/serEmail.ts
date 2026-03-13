@@ -42,7 +42,7 @@ export async function sendSerEmail(n: SerNotification): Promise<boolean> {
       <p style="color:#374151;margin:0 0 12px">${n.body}</p>
       ${linkHtml}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px"/>
-      <p style="font-size:12px;color:#9ca3af">Ops Desktop — SER Intelligence</p>
+      <p style="font-size:12px;color:#9ca3af">LSLL HUB — SPED Intelligence</p>
     </div>`;
 
   try {

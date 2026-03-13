@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Ops Desktop',
-    short_name: 'Ops',
+    name: 'LSLL HUB',
+    short_name: 'LSLL',
     description: 'Internal operations management for publishing teams',
     start_url: '/',
     display: 'standalone',

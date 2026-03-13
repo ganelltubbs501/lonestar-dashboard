@@ -125,6 +125,7 @@ enum DeliverableType {
   TBP
   EVENTS
   NEWSLETTER
+  MAJOR_EVENT
 }
 
 model WorkItem {
@@ -159,8 +160,8 @@ model WorkItem {
   tbpMagazineIssue    String?
 
   // Ownership
-  requesterId String
-  requester   User   @relation("Requester", fields: [requesterId], references: [id])
+  requesterId String?
+  requester   User?  @relation("Requester", fields: [requesterId], references: [id])
 
   ownerId String?
   owner   User?  @relation("Owner", fields: [ownerId], references: [id])
@@ -518,6 +519,8 @@ model MagazineIssue {
   month       Int      // 1-12
   title       String   // "February 2026"
   themeColor  String?  // "#FFC5E6" from your sheet
+  theme       String?  // free-text theme e.g. "Romance"
+  driveLink   String?  // Google Drive folder URL
   notes       String?
   dueAt       DateTime?  // optional "issue due/publish"
   createdAt   DateTime @default(now())
@@ -721,4 +724,36 @@ enum SheetsImportKind {
 enum ImportStatus {
   SUCCESS
   FAILED
+}
+
+// =============================================================================
+// BOOK SCRAPER
+// =============================================================================
+
+model BookScrapeRun {
+  id           String             @id @default(uuid())
+  startedAt    DateTime           @default(now())
+  finishedAt   DateTime?
+  status       String             // RUNNING | SUCCESS | FAILED
+  sitesChecked Int                @default(0)
+  resultsFound Int                @default(0)
+  error        String?
+  results      BookScrapeResult[]
+}
+
+model BookScrapeResult {
+  id              String        @id @default(uuid())
+  runId           String
+  run             BookScrapeRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  sourceUrl       String
+  pageTitle       String?
+  authorName      String?
+  bookTitle       String?
+  contactInfo     String?
+  releaseDate     String?
+  texasConnection String        // "Texas Author" | "Texas Book" | "Both"
+  snippet         String?
+  createdAt       DateTime      @default(now())
+
+  @@index([runId])
 }

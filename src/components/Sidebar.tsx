@@ -15,6 +15,7 @@ import {
   CalendarDays,
   Inbox,
   BookOpen,
+  BookMarked,
   Users,
   BarChart2,
   FileText,
@@ -22,6 +23,8 @@ import {
   Target,
   Download,
   Briefcase,
+  Search,
+  Globe,
 } from 'lucide-react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -30,13 +33,16 @@ const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/executive', label: 'Executive', icon: Briefcase },
   { href: '/board', label: 'Work Board', icon: Kanban },
-  { href: '/calendar', label: 'Editorial Calendar', icon: Calendar },
+  { href: '/calendar', label: 'Calendar', icon: Calendar },
   { href: '/events', label: 'Events Pipeline', icon: CalendarDays },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/magazine', label: 'Magazine', icon: BookOpen },
   { href: '/texas-authors', label: 'Texas Authors', icon: Users },
+  { href: '/texas-book-previews', label: 'TX Book Previews', icon: BookMarked },
+  { href: '/scrape-results', label: 'Book Scraper', icon: Search },
+  { href: '/website-updates', label: 'Website Updates', icon: Globe },
   { href: '/campaigns', label: 'Campaigns', icon: Megaphone },
-  { href: '/ser', label: 'SER Intel', icon: FileText },
+  { href: '/ser', label: 'SPED Intel', icon: FileText },
   { href: '/sla', label: 'SLA Intel', icon: Target },
   { href: '/metrics', label: 'Metrics', icon: BarChart2 },
   { href: '/export', label: 'Export', icon: Download },
@@ -54,7 +60,7 @@ export function Sidebar() {
     <>
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 w-full bg-white z-20 border-b border-gray-200 px-4 py-3 flex justify-between items-center shadow-sm">
-        <span className="font-bold text-lg text-indigo-900">Ops Desktop</span>
+        <span className="font-bold text-lg text-indigo-900">LSLL HUB</span>
         <button onClick={() => setMobileOpen(!isMobileOpen)}>
           {isMobileOpen ? (
             <X className="w-6 h-6 text-gray-600" />
@@ -75,9 +81,9 @@ export function Sidebar() {
           {/* Logo */}
           <div className="h-16 flex items-center px-6 border-b border-gray-100">
             <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center mr-3">
-              <span className="text-white font-bold text-xl">O</span>
+              <span className="text-white font-bold text-xl">L</span>
             </div>
-            <span className="text-xl font-bold text-gray-900">Ops Desktop</span>
+            <span className="text-xl font-bold text-gray-900">LSLL HUB</span>
           </div>
 
           {/* Navigation */}

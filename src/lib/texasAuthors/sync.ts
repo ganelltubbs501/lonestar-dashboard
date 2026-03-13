@@ -156,9 +156,9 @@ export async function syncTexasAuthorsFromSheet(args: {
       continue;
     }
 
-    const existing = await prisma.texasAuthor.findUnique({
+    const existing = await (prisma as any).texasAuthor.findUnique({
       where: { externalKey },
-      select: { id: true, name: true, email: true, phone: true, website: true, city: true, state: true, notes: true, contacted: true, sourceRef: true },
+      select: { id: true, name: true, email: true, phone: true, website: true, city: true, state: true, notes: true, contacted: true, sourceRef: true, raw: true },
     });
 
     const incomingName = name || email || externalKey;
@@ -173,6 +173,7 @@ export async function syncTexasAuthorsFromSheet(args: {
     // Skip if nothing changed
     if (
       existing &&
+      existing.raw != null &&
       existing.name === incomingName &&
       existing.email === incomingEmail &&
       existing.phone === incomingPhone &&
@@ -200,6 +201,7 @@ export async function syncTexasAuthorsFromSheet(args: {
         notes: incomingNotes,
         contacted,
         sourceRef: incomingSourceRef,
+        raw: row,
       },
       update: {
         name: incomingName,
@@ -211,6 +213,7 @@ export async function syncTexasAuthorsFromSheet(args: {
         notes: incomingNotes,
         contacted,
         sourceRef: incomingSourceRef,
+        raw: row,
         updatedAt: new Date(),
       },
     });
@@ -222,7 +225,7 @@ export async function syncTexasAuthorsFromSheet(args: {
   const finishedAt = new Date();
   const durationMs = finishedAt.getTime() - startedAt.getTime();
 
-  await prisma.sheetsImportRun.create({
+  await (prisma as any).sheetsImportRun.create({
     data: {
       kind: "TEXAS_AUTHORS",
       spreadsheetId,
@@ -320,7 +323,7 @@ export async function syncTexasAuthors() {
 
       // Log a FAILED import run so the UI can surface it
       const tabFailedAt = new Date();
-      await prisma.sheetsImportRun.create({
+      await (prisma as any).sheetsImportRun.create({
         data: {
           kind: "TEXAS_AUTHORS",
           spreadsheetId,

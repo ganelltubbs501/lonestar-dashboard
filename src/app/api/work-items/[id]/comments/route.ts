@@ -68,7 +68,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await prisma.auditLog.create({
       data: {
         workItemId: id,
-        userId,
+        userId: userId || null,
         action: 'comment_added',
         meta: { commentId: comment.id },
       },

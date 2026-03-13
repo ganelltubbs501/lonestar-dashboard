@@ -151,9 +151,9 @@ export default function ExecutivePage() {
           {/* ── Detail cards ─────────────────────────────────────────────── */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
 
-            {/* SER Health */}
-            <SectionCard title="SER Health">
-              <Metric label="Active SERs" value={data.ser.active} rag="neutral" />
+            {/* SPED Health */}
+            <SectionCard title="SPED Health">
+              <Metric label="Active SPEDs" value={data.ser.active} rag="neutral" />
               <Metric
                 label="Unassigned"
                 value={data.ser.unassigned}

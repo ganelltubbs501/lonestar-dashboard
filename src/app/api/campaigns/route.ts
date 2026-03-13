@@ -1,14 +1,7 @@
 import { prisma } from '@/lib/db';
 import { successResponse, withAuth } from '@/lib/api-utils';
-
-export const MILESTONE_TYPES = [
-  'SIGNUP_DEADLINE',
-  'GRAPHICS_DUE',
-  'FOLDER_TO_REVIEWERS',
-  'WRAP_UP',
-] as const;
-
-export type MilestoneType = (typeof MILESTONE_TYPES)[number];
+import { MILESTONE_TYPES } from '@/lib/campaign-types';
+import type { MilestoneType } from '@/lib/campaign-types';
 
 type CampaignRow = {
   id: string;

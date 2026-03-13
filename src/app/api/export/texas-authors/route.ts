@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 
 const esc = (v: unknown) => {
@@ -17,11 +16,6 @@ function fmtDate(d: Date | null | undefined) {
 // GET /api/export/texas-authors
 // Query params: q, contacted (true|false), createdFrom, createdTo
 export async function GET(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-
   const { searchParams } = new URL(req.url);
   const q = searchParams.get('q');
   const contacted = searchParams.get('contacted');

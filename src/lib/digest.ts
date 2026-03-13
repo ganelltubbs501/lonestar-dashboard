@@ -60,24 +60,25 @@ async function getDigestData(): Promise<DigestData> {
     owner: { select: { name: true, email: true } },
   } as const;
 
+  const wi = (prisma as any).workItem;
   const [overdue, dueToday, dueSoon, blocked] = await Promise.all([
-    prisma.workItem.findMany({
-      where: { status: { not: 'DONE' as any }, dueAt: { lt: todayStart, not: null } },
+    wi.findMany({
+      where: { status: { not: 'DONE' }, dueAt: { lt: todayStart, not: null } },
       select,
       orderBy: { dueAt: 'asc' },
     }),
-    prisma.workItem.findMany({
-      where: { status: { not: 'DONE' as any }, dueAt: { gte: todayStart, lte: todayEnd } },
+    wi.findMany({
+      where: { status: { not: 'DONE' }, dueAt: { gte: todayStart, lte: todayEnd } },
       select,
       orderBy: { dueAt: 'asc' },
     }),
-    prisma.workItem.findMany({
-      where: { status: { not: 'DONE' as any }, dueAt: { gte: tomorrowStart, lte: threeDaysEnd } },
+    wi.findMany({
+      where: { status: { not: 'DONE' }, dueAt: { gte: tomorrowStart, lte: threeDaysEnd } },
       select,
       orderBy: { dueAt: 'asc' },
     }),
-    prisma.workItem.findMany({
-      where: { status: 'BLOCKED' as any, statusChangedAt: { lt: blockThreshold } },
+    wi.findMany({
+      where: { status: 'BLOCKED', statusChangedAt: { lt: blockThreshold } },
       select,
       orderBy: { statusChangedAt: 'asc' },
     }),
@@ -143,14 +144,13 @@ function buildEmailHtml(data: DigestData): string {
         <h2 style="margin:0 0 8px">✅ All clear — ${dateStr}</h2>
         <p style="color:#374151">Nothing is overdue, due, or blocked today. Great work!</p>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:24px"/>
-        <p style="font-size:12px;color:#9ca3af">Ops Desktop · Daily Digest</p>
+        <p style="font-size:12px;color:#9ca3af">LSLL HUB · Daily Digest</p>
       </div>`;
   }
 
   const tableStyle = 'border-collapse:collapse;width:100%;margin-bottom:24px;font-size:13px';
   const thStyle = 'text-align:left;padding:6px 10px;background:#f9fafb;border-bottom:1px solid #e5e7eb;color:#6b7280;font-weight:600;font-size:11px;text-transform:uppercase';
   const tdStyle = 'padding:8px 10px;border-bottom:1px solid #f3f4f6;color:#111827;vertical-align:top';
-  const tdGrayStyle = `${tdStyle};color:#6b7280`;
 
   const buildTable = (items: DigestItem[], cols: string[], rows: (item: DigestItem) => string[]) => {
     if (items.length === 0) return '';
@@ -221,7 +221,7 @@ function buildEmailHtml(data: DigestData): string {
       ${section('🚫', 'Blocked >3 Days', blocked.length, blockedTable)}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin-top:8px"/>
       <p style="font-size:12px;color:#9ca3af;margin:12px 0 0">
-        Ops Desktop · Daily Digest
+        LSLL HUB · Daily Digest
         ${appUrl ? ` · <a href="${appUrl}" style="color:#6366f1">Open dashboard</a>` : ''}
       </p>
     </div>`;
@@ -237,8 +237,8 @@ async function sendDigestEmail(data: DigestData): Promise<boolean> {
   const total = data.overdue.length + data.dueToday.length + data.dueSoon.length + data.blocked.length;
   const dateStr = data.generatedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   const subject = total === 0
-    ? `[Ops Desktop] Daily Digest — ${dateStr} · All clear ✅`
-    : `[Ops Desktop] Daily Digest — ${dateStr} · ${total} items need attention`;
+    ? `[LSLL HUB] Daily Digest — ${dateStr} · All clear ✅`
+    : `[LSLL HUB] Daily Digest — ${dateStr} · ${total} items need attention`;
 
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
